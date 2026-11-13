@@ -1,0 +1,30 @@
+# Dependências
+/backend-laravel/vendor/
+/frontend-admin/node_modules/
+/frontend-admin/dist/
+
+# Arquivos de ambiente sensíveis
+.env
+.env.*
+!.env.example
+!.env.production.example
+!.env.homolog.example
+/backend-laravel/.env
+/backend-laravel/.env.*
+!/backend-laravel/.env.example
+!/backend-laravel/.env.production.example
+!/backend-laravel/.env.homolog.example
+
+# SQLite local & logs
+/backend-laravel/database/*.sqlite
+/backend-laravel/database/*.sqlite-journal
+/backend-laravel/storage/logs/*.log
+/backend-laravel/storage/framework/cache/*
+/backend-laravel/storage/framework/sessions/*
+/backend-laravel/storage/framework/views/*
+
+# IDE / OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -1,0 +1,76 @@
+services:
+  gestao-docker-socket-proxy-homolog:
+    image: tecnativa/docker-socket-proxy:latest
+    container_name: gestao-docker-socket-proxy-homolog
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - CONTAINERS=1
+      - POST=0
+      - DELETE=0
+      - PUT=0
+      - PATCH=0
+      - EXEC=0
+      - IMAGES=0
+      - NETWORKS=0
+      - VOLUMES=0
+      - SWARM=0
+    networks:
+      - gestao-net
+
+  gestao-escolar-app-homolog:
+    build:
+      context: ./backend-laravel
+      dockerfile: Dockerfile
+    image: gestao-escolar-app:homolog
+    container_name: gestao-escolar-app-homolog
+    restart: unless-stopped
+    volumes:
+      - ./backend-laravel:/var/www/html
+    env_file:
+      - ./backend-laravel/.env.homolog
+    environment:
+      - DOCKER_HOST_HTTP=http://gestao-docker-socket-proxy-homolog:2375
+    depends_on:
+      - gestao-docker-socket-proxy-homolog
+    networks:
+      - gestao-net
+
+  gestao-escolar-scheduler-homolog:
+    image: gestao-escolar-app:homolog
+    container_name: gestao-escolar-scheduler-homolog
+    restart: unless-stopped
+    command: sh -c "while true; do php artisan schedule:run --no-interaction; sleep 60; done"
+    volumes:
+      - ./backend-laravel:/var/www/html
+    env_file:
+      - ./backend-laravel/.env.homolog
+    environment:
+      - DOCKER_HOST_HTTP=http://gestao-docker-socket-proxy-homolog:2375
+    depends_on:
+      - gestao-escolar-app-homolog
+    networks:
+      - gestao-net
+
+  gestao-escolar-web-homolog:
+    build:
+      context: ./frontend-admin
+      dockerfile: Dockerfile
+      args:
+        - VITE_BASE_PATH=/dev/admin/
+        - VITE_API_BASE_URL=/GE/dev/v1
+    image: gestao-escolar-web:homolog
+    container_name: gestao-escolar-web-homolog
+    restart: unless-stopped
+    volumes:
+      - ./backend-laravel/storage/app/public:/var/www/html/storage/app/public:ro
+      - ./nginx/homolog.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - gestao-net
+    depends_on:
+      - gestao-escolar-app-homolog
+
+networks:
+  gestao-net:
+    external: true
