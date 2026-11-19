@@ -9,6 +9,7 @@ use App\Services\Auth\PortalSemedAuthService;
 use App\Services\Auth\SchoolGroupAuthService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use OpenApi\Attributes as OA;
 
@@ -62,6 +63,7 @@ class SchoolGroupController extends Controller
         parameters: [
             new OA\Parameter(name: 'search', in: 'query', required: false, description: 'Filtrar por UID, nome ou INEP/sigla', schema: new OA\Schema(type: 'string')),
             new OA\Parameter(name: 'unit_type', in: 'query', required: false, description: 'Filtrar por unit_type: school ou sector', schema: new OA\Schema(type: 'string', enum: ['school', 'sector'])),
+            new OA\Parameter(name: 'active', in: 'query', required: false, description: 'Filtrar por status ativo (all, 1, 0, true, false)', schema: new OA\Schema(type: 'string', enum: ['all', '1', '0', 'true', 'false'])),
             new OA\Parameter(name: 'per_page', in: 'query', required: false, description: 'Itens por página (5 a 100)', schema: new OA\Schema(type: 'integer', default: 20, minimum: 5, maximum: 100)),
         ],
         responses: [
@@ -72,7 +74,10 @@ class SchoolGroupController extends Controller
     )]
     public function index(Request $request): JsonResponse
     {
-        $query = SchoolGroup::query()->withCount('members');
+        $query = SchoolGroup::query()->withCount([
+            'members',
+            'members as active_members_count' => fn($q) => $q->where('active', true),
+        ]);
 
         if ($search = trim((string) $request->input('search'))) {
             $query->where(function ($q) use ($search) {
@@ -86,11 +91,219 @@ class SchoolGroupController extends Controller
             $query->where('unit_type', $unitType);
         }
 
+        if ($request->filled('active') && $request->input('active') !== 'all') {
+            $activeVal = filter_var($request->input('active'), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            if ($activeVal !== null) {
+                $query->where('active', $activeVal);
+            }
+        }
+
         $perPage = min(max($request->integer('per_page', 20), 5), 100);
 
         return response()->json([
             'success' => true,
             'data' => $query->orderBy('school_name')->paginate($perPage),
+            'stats' => [
+                'total_groups' => SchoolGroup::count(),
+                'active_groups' => SchoolGroup::where('active', true)->count(),
+                'schools_count' => SchoolGroup::where('unit_type', 'school')->count(),
+                'sectors_count' => SchoolGroup::where('unit_type', 'sector')->count(),
+                'total_members' => SchoolGroupMember::count(),
+            ],
+        ]);
+    }
+
+    #[OA\Post(
+        path: '/api/v1/school-groups',
+        tags: ['School Groups'],
+        summary: 'Criar grupo de unidade (escola ou setor)',
+        security: [['bearerAuth' => []]],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                properties: [
+                    new OA\Property(property: 'school_uid', type: 'string', format: 'uuid', example: '9d8a12b4-4e56-4c89-a123-7890abcdef12'),
+                    new OA\Property(property: 'unit_uid', type: 'string', format: 'uuid', nullable: true),
+                    new OA\Property(property: 'school_name', type: 'string', maxLength: 180, example: 'UMEF Alger Ribeiro Bossois'),
+                    new OA\Property(property: 'unit_type', type: 'string', enum: ['school', 'sector'], default: 'school'),
+                    new OA\Property(property: 'school_inep', type: 'string', maxLength: 30, nullable: true, example: '32066309'),
+                    new OA\Property(property: 'active', type: 'boolean', default: true),
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 201, description: 'Grupo criado com sucesso'),
+            new OA\Response(response: 401, description: 'Não autenticado'),
+            new OA\Response(response: 403, description: 'Sem permissão administrativa'),
+            new OA\Response(response: 422, description: 'Erro de validação ou UID já cadastrado'),
+        ]
+    )]
+    public function store(Request $request, SchoolGroupAuthService $groupAuth): JsonResponse
+    {
+        $validated = $request->validate([
+            'unit_uid' => ['nullable', 'uuid'],
+            'school_uid' => ['nullable', 'uuid', 'required_without:unit_uid'],
+            'school_name' => ['nullable', 'string', 'max:180', 'required_without:name'],
+            'name' => ['nullable', 'string', 'max:180'],
+            'unit_type' => ['nullable', 'string', 'in:school,sector', 'max:30'],
+            'school_inep' => ['nullable', 'string', 'max:30'],
+            'code' => ['nullable', 'string', 'max:30'],
+            'active' => ['nullable', 'boolean'],
+        ]);
+
+        $uid = trim((string) ($validated['unit_uid'] ?? $validated['school_uid']));
+        $name = trim((string) ($validated['school_name'] ?? $validated['name']));
+        $rawInep = $validated['school_inep'] ?? $validated['code'] ?? null;
+        $inep = $rawInep !== null ? trim((string) $rawInep) : null;
+        if ($inep === '') {
+            $inep = null;
+        }
+
+        if (SchoolGroup::where('school_uid', $uid)->exists()) {
+            throw ValidationException::withMessages([
+                'school_uid' => ['Já existe um grupo cadastrado para esta unidade (UID).'],
+            ]);
+        }
+
+        $group = SchoolGroup::create([
+            'school_uid' => $uid,
+            'school_name' => $name,
+            'unit_type' => $validated['unit_type'] ?? 'school',
+            'school_inep' => $inep,
+            'active' => array_key_exists('active', $validated) ? (bool) $validated['active'] : true,
+        ]);
+
+        $groupAuth->recordAudit(
+            $request,
+            'CREATE',
+            "Criou grupo {$group->school_name} ({$group->school_uid} — {$group->unit_type}).",
+            'SchoolGroup',
+            $group->school_uid,
+            user: $request->user(),
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Grupo criado com sucesso.',
+            'data' => $group->loadCount([
+                'members',
+                'members as active_members_count' => fn($q) => $q->where('active', true),
+            ]),
+        ], 201);
+    }
+
+    #[OA\Patch(
+        path: '/api/v1/school-groups/{school_uid}',
+        tags: ['School Groups'],
+        summary: 'Atualizar grupo de unidade (escola ou setor)',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(name: 'school_uid', in: 'path', required: true, description: 'UID da unidade (escola ou setor)', schema: new OA\Schema(type: 'string', format: 'uuid')),
+        ],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                properties: [
+                    new OA\Property(property: 'school_name', type: 'string', maxLength: 180),
+                    new OA\Property(property: 'unit_type', type: 'string', enum: ['school', 'sector']),
+                    new OA\Property(property: 'school_inep', type: 'string', maxLength: 30, nullable: true),
+                    new OA\Property(property: 'active', type: 'boolean'),
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Grupo atualizado com sucesso'),
+            new OA\Response(response: 401, description: 'Não autenticado'),
+            new OA\Response(response: 403, description: 'Sem permissão administrativa'),
+            new OA\Response(response: 404, description: 'Grupo não encontrado'),
+            new OA\Response(response: 422, description: 'Erro de validação'),
+        ]
+    )]
+    public function update(Request $request, string $schoolUid, SchoolGroupAuthService $groupAuth): JsonResponse
+    {
+        $group = SchoolGroup::where('school_uid', $schoolUid)->firstOrFail();
+
+        $validated = $request->validate([
+            'school_name' => ['sometimes', 'required', 'string', 'max:180'],
+            'unit_type' => ['sometimes', 'string', 'in:school,sector', 'max:30'],
+            'school_inep' => ['sometimes', 'nullable', 'string', 'max:30'],
+            'active' => ['sometimes', 'boolean'],
+        ]);
+
+        $attributes = [];
+        if (array_key_exists('school_name', $validated)) {
+            $attributes['school_name'] = trim((string) $validated['school_name']);
+        }
+        if (array_key_exists('unit_type', $validated)) {
+            $attributes['unit_type'] = $validated['unit_type'];
+        }
+        if (array_key_exists('school_inep', $validated)) {
+            $inep = $validated['school_inep'] !== null ? trim((string) $validated['school_inep']) : null;
+            $attributes['school_inep'] = $inep !== '' ? $inep : null;
+        }
+        if (array_key_exists('active', $validated)) {
+            $attributes['active'] = (bool) $validated['active'];
+        }
+
+        $group->update($attributes);
+
+        $groupAuth->recordAudit(
+            $request,
+            'UPDATE',
+            "Atualizou grupo {$group->school_name} ({$schoolUid}).",
+            'SchoolGroup',
+            $schoolUid,
+            user: $request->user(),
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Grupo atualizado com sucesso.',
+            'data' => $group->fresh()->loadCount([
+                'members',
+                'members as active_members_count' => fn($q) => $q->where('active', true),
+            ]),
+        ]);
+    }
+
+    #[OA\Delete(
+        path: '/api/v1/school-groups/{school_uid}',
+        tags: ['School Groups'],
+        summary: 'Excluir grupo de unidade e seus vínculos',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(name: 'school_uid', in: 'path', required: true, description: 'UID da unidade (escola ou setor)', schema: new OA\Schema(type: 'string', format: 'uuid')),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Grupo removido com sucesso'),
+            new OA\Response(response: 401, description: 'Não autenticado'),
+            new OA\Response(response: 403, description: 'Sem permissão administrativa'),
+            new OA\Response(response: 404, description: 'Grupo não encontrado'),
+        ]
+    )]
+    public function destroy(Request $request, string $schoolUid, SchoolGroupAuthService $groupAuth): JsonResponse
+    {
+        $group = SchoolGroup::withCount('members')->where('school_uid', $schoolUid)->firstOrFail();
+        $name = $group->school_name ?: $schoolUid;
+        $membersCount = $group->members_count;
+
+        DB::transaction(function () use ($group) {
+            $group->members()->delete();
+            $group->delete();
+        });
+
+        $groupAuth->recordAudit(
+            $request,
+            'DELETE',
+            "Removeu grupo {$name} ({$schoolUid}) e {$membersCount} vínculo(s) de membro(s).",
+            'SchoolGroup',
+            $schoolUid,
+            user: $request->user(),
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Grupo removido com sucesso.',
         ]);
     }
 
