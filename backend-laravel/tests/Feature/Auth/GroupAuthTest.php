@@ -422,4 +422,104 @@ class GroupAuthTest extends TestCase
 
         $this->assertTrue(AuditLog::where('action', 'SYNC')->exists());
     }
+
+    public function test_admin_can_crud_school_groups_and_filter_list(): void
+    {
+        $admin = User::create([
+            'portal_user_id' => 2,
+            'name' => 'Master SEMED',
+            'email' => 'master@semed.vilavelha.es.gov.br',
+            'roles' => ['Master'],
+        ]);
+        Sanctum::actingAs($admin);
+
+        // 1. Criar grupo de escola e grupo de setor
+        $this->postJson('/api/v1/school-groups', [
+            'school_uid' => $this->schoolUid,
+            'school_name' => 'UMEF Alger Ribeiro Bossois',
+            'unit_type' => 'school',
+            'school_inep' => '32066309',
+            'active' => true,
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.school_uid', $this->schoolUid)
+            ->assertJsonPath('data.unit_type', 'school');
+
+        $this->postJson('/api/v1/school-groups', [
+            'unit_uid' => $this->sectorUid,
+            'school_name' => 'Alimentação Escolar',
+            'unit_type' => 'sector',
+            'active' => true,
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.school_uid', $this->sectorUid)
+            ->assertJsonPath('data.unit_type', 'sector');
+
+        // Tentativa duplicada do mesmo school_uid -> 422
+        $this->postJson('/api/v1/school-groups', [
+            'school_uid' => $this->schoolUid,
+            'school_name' => 'Duplicada',
+            'unit_type' => 'school',
+        ])->assertStatus(422);
+
+        // Vincula membro ao grupo escola para validar exclusão em cascata depois
+        $group = SchoolGroup::where('school_uid', $this->schoolUid)->firstOrFail();
+        SchoolGroupMember::create([
+            'school_group_id' => $group->id,
+            'school_uid' => $this->schoolUid,
+            'email' => 'diretor.crud@semed.vilavelha.es.gov.br',
+            'role' => 'Diretor',
+            'active' => true,
+        ]);
+
+        // 2. Listagem com stats e filtros
+        $this->getJson('/api/v1/school-groups')
+            ->assertOk()
+            ->assertJsonPath('stats.total_groups', 2)
+            ->assertJsonPath('stats.active_groups', 2)
+            ->assertJsonPath('stats.schools_count', 1)
+            ->assertJsonPath('stats.sectors_count', 1)
+            ->assertJsonPath('stats.total_members', 1);
+
+        $this->getJson('/api/v1/school-groups?unit_type=sector')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.data')
+            ->assertJsonPath('data.data.0.school_uid', $this->sectorUid);
+
+        $this->getJson('/api/v1/school-groups?search=Alger&active=1')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.data')
+            ->assertJsonPath('data.data.0.school_uid', $this->schoolUid);
+
+        // 3. Atualizar grupo
+        $this->patchJson("/api/v1/school-groups/{$this->schoolUid}", [
+            'school_name' => 'UMEF Alger Ribeiro Bossois Atualizada',
+            'unit_type' => 'school',
+            'school_inep' => '32066310',
+            'active' => false,
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.school_name', 'UMEF Alger Ribeiro Bossois Atualizada')
+            ->assertJsonPath('data.school_inep', '32066310')
+            ->assertJsonPath('data.active', false);
+
+        // Valida filtro de inativos
+        $this->getJson('/api/v1/school-groups?active=0')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.data')
+            ->assertJsonPath('data.data.0.school_uid', $this->schoolUid);
+
+        // 4. Excluir grupo e seus membros em cascata
+        $this->deleteJson("/api/v1/school-groups/{$this->schoolUid}")
+            ->assertOk()
+            ->assertJsonPath('success', true);
+
+        $this->assertDatabaseMissing('school_groups', ['school_uid' => $this->schoolUid]);
+        $this->assertDatabaseMissing('school_group_members', ['school_uid' => $this->schoolUid]);
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'DELETE',
+            'resource_type' => 'SchoolGroup',
+            'resource_id' => $this->schoolUid,
+        ]);
+    }
 }

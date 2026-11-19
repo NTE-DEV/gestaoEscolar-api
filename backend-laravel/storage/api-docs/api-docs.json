@@ -531,6 +531,22 @@
                         }
                     },
                     {
+                        "name": "active",
+                        "in": "query",
+                        "description": "Filtrar por status ativo (all, 1, 0, true, false)",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "all",
+                                "1",
+                                "0",
+                                "true",
+                                "false"
+                            ]
+                        }
+                    },
+                    {
                         "name": "per_page",
                         "in": "query",
                         "description": "Itens por página (5 a 100)",
@@ -552,6 +568,189 @@
                     },
                     "403": {
                         "description": "Sem permissão administrativa"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "School Groups"
+                ],
+                "summary": "Criar grupo de unidade (escola ou setor)",
+                "operationId": "a056197174c3cf2c49fcf80594ef7dde",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "school_uid": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "example": "9d8a12b4-4e56-4c89-a123-7890abcdef12"
+                                    },
+                                    "unit_uid": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    },
+                                    "school_name": {
+                                        "type": "string",
+                                        "example": "UMEF Alger Ribeiro Bossois",
+                                        "maxLength": 180
+                                    },
+                                    "unit_type": {
+                                        "type": "string",
+                                        "default": "school",
+                                        "enum": [
+                                            "school",
+                                            "sector"
+                                        ]
+                                    },
+                                    "school_inep": {
+                                        "type": "string",
+                                        "example": "32066309",
+                                        "nullable": true,
+                                        "maxLength": 30
+                                    },
+                                    "active": {
+                                        "type": "boolean",
+                                        "default": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Grupo criado com sucesso"
+                    },
+                    "401": {
+                        "description": "Não autenticado"
+                    },
+                    "403": {
+                        "description": "Sem permissão administrativa"
+                    },
+                    "422": {
+                        "description": "Erro de validação ou UID já cadastrado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/school-groups/{school_uid}": {
+            "delete": {
+                "tags": [
+                    "School Groups"
+                ],
+                "summary": "Excluir grupo de unidade e seus vínculos",
+                "operationId": "5be25d6bda86f66a82d784f07d17bd18",
+                "parameters": [
+                    {
+                        "name": "school_uid",
+                        "in": "path",
+                        "description": "UID da unidade (escola ou setor)",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Grupo removido com sucesso"
+                    },
+                    "401": {
+                        "description": "Não autenticado"
+                    },
+                    "403": {
+                        "description": "Sem permissão administrativa"
+                    },
+                    "404": {
+                        "description": "Grupo não encontrado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "patch": {
+                "tags": [
+                    "School Groups"
+                ],
+                "summary": "Atualizar grupo de unidade (escola ou setor)",
+                "operationId": "c027c937acbcf7341c034d5b885815ef",
+                "parameters": [
+                    {
+                        "name": "school_uid",
+                        "in": "path",
+                        "description": "UID da unidade (escola ou setor)",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "school_name": {
+                                        "type": "string",
+                                        "maxLength": 180
+                                    },
+                                    "unit_type": {
+                                        "type": "string",
+                                        "enum": [
+                                            "school",
+                                            "sector"
+                                        ]
+                                    },
+                                    "school_inep": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "maxLength": 30
+                                    },
+                                    "active": {
+                                        "type": "boolean"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Grupo atualizado com sucesso"
+                    },
+                    "401": {
+                        "description": "Não autenticado"
+                    },
+                    "403": {
+                        "description": "Sem permissão administrativa"
+                    },
+                    "404": {
+                        "description": "Grupo não encontrado"
+                    },
+                    "422": {
+                        "description": "Erro de validação"
                     }
                 },
                 "security": [

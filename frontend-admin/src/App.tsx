@@ -5,6 +5,7 @@ import { resolveRouterBasename } from './services/api'
 import { LoginPage } from './pages/LoginPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { AuditLogsPage } from './pages/AuditLogsPage'
+import { GroupsPage } from './pages/GroupsPage'
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { token, loading } = useAuth()
@@ -28,6 +29,14 @@ export function App() {
             element={
               <ProtectedRoute>
                 <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/groups"
+            element={
+              <ProtectedRoute>
+                <GroupsPage />
               </ProtectedRoute>
             }
           />

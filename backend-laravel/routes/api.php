@@ -52,6 +52,11 @@ Route::prefix('v1')->group(function () {
 
             Route::prefix('school-groups')->group(function () {
                 Route::get('/', [SchoolGroupController::class, 'index']);
+                Route::post('/', [SchoolGroupController::class, 'store']);
+                Route::match(['put', 'patch'], '/{school_uid}', [SchoolGroupController::class, 'update'])
+                    ->whereUuid('school_uid');
+                Route::delete('/{school_uid}', [SchoolGroupController::class, 'destroy'])
+                    ->whereUuid('school_uid');
                 Route::get('/{school_uid}/members', [SchoolGroupController::class, 'members'])
                     ->whereUuid('school_uid');
                 Route::post('/{school_uid}/members', [SchoolGroupController::class, 'storeMember'])
