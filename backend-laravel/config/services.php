@@ -38,6 +38,8 @@ return [
     'portal_semed' => [
         'base_url' => env('PORTAL_SEMED_API_URL', 'https://portalsemed.vilavelha.es.gov.br'),
         'timeout' => (int) env('PORTAL_SEMED_TIMEOUT', 15),
+        'api_token' => env('PORTAL_API_TOKEN'),
+        'group_auto_sync' => filter_var(env('PORTAL_GROUP_AUTO_SYNC', false), FILTER_VALIDATE_BOOLEAN),
     ],
 
     'docker' => [
