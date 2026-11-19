@@ -13,9 +13,22 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use OpenApi\Attributes as OA;
 
 class MonitoringController extends Controller
 {
+    #[OA\Get(
+        path: '/api/v1/monitoring/system',
+        tags: ['Monitoring'],
+        summary: 'Obter snapshot em tempo real do servidor',
+        description: 'Retorna métricas instantâneas de CPU, memória, disco e uptime do host.',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Snapshot de métricas do host'),
+            new OA\Response(response: 401, description: 'Não autenticado'),
+            new OA\Response(response: 403, description: 'Sem permissão administrativa'),
+        ]
+    )]
     public function system(HostMetricsService $hostMetrics): JsonResponse
     {
         return response()->json([
@@ -24,6 +37,20 @@ class MonitoringController extends Controller
         ]);
     }
 
+    #[OA\Get(
+        path: '/api/v1/monitoring/system-history',
+        tags: ['Monitoring'],
+        summary: 'Obter histórico diário consolidado de CPU e memória',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(name: 'days', in: 'query', required: false, description: 'Janela em dias (5 a 60)', schema: new OA\Schema(type: 'integer', default: 20, minimum: 5, maximum: 60)),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Histórico consolidado de métricas do host'),
+            new OA\Response(response: 401, description: 'Não autenticado'),
+            new OA\Response(response: 403, description: 'Sem permissão administrativa'),
+        ]
+    )]
     public function systemHistory(Request $request): JsonResponse
     {
         $days = min(max($request->integer('days', 20), 5), 60);
@@ -120,6 +147,17 @@ class MonitoringController extends Controller
         ]);
     }
 
+    #[OA\Get(
+        path: '/api/v1/monitoring/docker',
+        tags: ['Monitoring'],
+        summary: 'Listar containers Docker monitorados',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Lista de containers e respectivos status'),
+            new OA\Response(response: 401, description: 'Não autenticado'),
+            new OA\Response(response: 403, description: 'Sem permissão administrativa'),
+        ]
+    )]
     public function docker(DockerEngineService $docker): JsonResponse
     {
         $result = $docker->listContainers();
@@ -132,6 +170,23 @@ class MonitoringController extends Controller
         ]);
     }
 
+    #[OA\Get(
+        path: '/api/v1/monitoring/docker/{id}/logs',
+        tags: ['Monitoring'],
+        summary: 'Obter logs recentes de um container Docker (Master)',
+        description: 'Acesso restrito a usuários com perfil Master.',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(name: 'id', in: 'path', required: true, description: 'ID ou nome do container Docker', schema: new OA\Schema(type: 'string')),
+            new OA\Parameter(name: 'tail', in: 'query', required: false, description: 'Quantidade de linhas recentes', schema: new OA\Schema(type: 'integer', default: 100)),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Logs do container'),
+            new OA\Response(response: 401, description: 'Não autenticado'),
+            new OA\Response(response: 403, description: 'Acesso restrito ao perfil Master'),
+            new OA\Response(response: 500, description: 'Erro ao consultar logs do Docker Engine'),
+        ]
+    )]
     public function dockerLogs(string $id, Request $request, DockerEngineService $docker): JsonResponse
     {
         $tail = $request->integer('tail', 100);
@@ -144,6 +199,17 @@ class MonitoringController extends Controller
         ], $result['ok'] ? 200 : 500);
     }
 
+    #[OA\Get(
+        path: '/api/v1/monitoring/requests/stats',
+        tags: ['Monitoring'],
+        summary: 'Obter estatísticas agregadas de requisições da API',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Métricas de volume, erros, latência média, usuários ativos e top rotas/serviços'),
+            new OA\Response(response: 401, description: 'Não autenticado'),
+            new OA\Response(response: 403, description: 'Sem permissão administrativa'),
+        ]
+    )]
     public function requestsStats(): JsonResponse
     {
         $totalRequests = ApiRequestLog::count();
@@ -182,6 +248,20 @@ class MonitoringController extends Controller
         ]);
     }
 
+    #[OA\Get(
+        path: '/api/v1/monitoring/requests/daily',
+        tags: ['Monitoring'],
+        summary: 'Obter série diária de requisições e erros HTTP',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(name: 'days', in: 'query', required: false, description: 'Janela em dias (5 a 60)', schema: new OA\Schema(type: 'integer', default: 20, minimum: 5, maximum: 60)),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Série diária de totais e erros'),
+            new OA\Response(response: 401, description: 'Não autenticado'),
+            new OA\Response(response: 403, description: 'Sem permissão administrativa'),
+        ]
+    )]
     public function requestsDaily(Request $request): JsonResponse
     {
         $days = min(max($request->integer('days', 20), 5), 60);
@@ -217,6 +297,20 @@ class MonitoringController extends Controller
         ]);
     }
 
+    #[OA\Get(
+        path: '/api/v1/monitoring/requests/top-ips',
+        tags: ['Monitoring'],
+        summary: 'Listar IPs com maior volume de requisições',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(name: 'limit', in: 'query', required: false, description: 'Limite de registros (5 a 100)', schema: new OA\Schema(type: 'integer', default: 20, minimum: 5, maximum: 100)),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Ranking de IPs por volume de requisições'),
+            new OA\Response(response: 401, description: 'Não autenticado'),
+            new OA\Response(response: 403, description: 'Sem permissão administrativa'),
+        ]
+    )]
     public function topIps(Request $request): JsonResponse
     {
         $limit = min(max($request->integer('limit', 20), 5), 100);
@@ -238,6 +332,27 @@ class MonitoringController extends Controller
         ]);
     }
 
+    #[OA\Post(
+        path: '/api/v1/monitoring/requests/reset',
+        tags: ['Monitoring'],
+        summary: 'Reiniciar histórico de métricas de requisições (Master)',
+        description: 'Trunca a tabela de logs de requisições e grava evento de auditoria. Restrito ao perfil Master.',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: 'Métricas resetadas com sucesso',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'success', type: 'boolean', example: true),
+                        new OA\Property(property: 'message', type: 'string', example: 'Métricas de requisições resetadas com sucesso.'),
+                    ]
+                )
+            ),
+            new OA\Response(response: 401, description: 'Não autenticado'),
+            new OA\Response(response: 403, description: 'Acesso restrito ao perfil Master'),
+        ]
+    )]
     public function resetRequests(Request $request): JsonResponse
     {
         $deleted = ApiRequestLog::count();
@@ -264,6 +379,17 @@ class MonitoringController extends Controller
         ]);
     }
 
+    #[OA\Get(
+        path: '/api/v1/monitoring/storage',
+        tags: ['Monitoring'],
+        summary: 'Analisar uso de armazenamento em disco dos módulos',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(response: 200, description: 'Relatório de utilização de armazenamento'),
+            new OA\Response(response: 401, description: 'Não autenticado'),
+            new OA\Response(response: 403, description: 'Sem permissão administrativa'),
+        ]
+    )]
     public function storage(StorageAnalyzerService $storage): JsonResponse
     {
         return response()->json([

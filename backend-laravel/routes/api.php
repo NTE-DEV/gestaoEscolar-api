@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Api\V1\Auth\AuthController;
+use App\Http\Controllers\Api\V1\Auth\GroupAuthController;
+use App\Http\Controllers\Api\V1\Auth\SchoolGroupController;
 use App\Http\Controllers\Api\V1\Monitoring\AuditLogController;
 use App\Http\Controllers\Api\V1\Monitoring\MonitoringController;
 use Illuminate\Support\Facades\Route;
@@ -11,14 +13,21 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 */
 Route::prefix('v1')->group(function () {
+    Route::redirect('/documentation', '/api/documentation');
+
     Route::get('/health', fn() => response()->json([
         'success' => true,
         'service' => 'gestao-escolar-api',
         'timestamp' => now()->toIso8601String(),
     ]));
 
+    // Lista oficial de unidades escolares (Portal Semed API com cache)
+    Route::get('/schools', [SchoolGroupController::class, 'schools']);
+
     // Autenticação via Portal Semed API
     Route::post('/auth/login', [AuthController::class, 'login']);
+    Route::post('/auth/group-login', [GroupAuthController::class, 'groupLogin'])
+        ->middleware('throttle:10,1');
 
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('/auth/me', [AuthController::class, 'me']);
@@ -29,6 +38,23 @@ Route::prefix('v1')->group(function () {
 
         // Painel Administrativo /admin (Master, Administrador do Sistema, Gestor do Sistema)
         Route::middleware('admin.role')->group(function () {
+            Route::post('/auth/group-verify', [GroupAuthController::class, 'groupVerify']);
+
+            Route::prefix('school-groups')->group(function () {
+                Route::get('/', [SchoolGroupController::class, 'index']);
+                Route::get('/{school_uid}/members', [SchoolGroupController::class, 'members'])
+                    ->whereUuid('school_uid');
+                Route::post('/{school_uid}/members', [SchoolGroupController::class, 'storeMember'])
+                    ->whereUuid('school_uid');
+                Route::patch('/{school_uid}/members/{member_id}', [SchoolGroupController::class, 'updateMember'])
+                    ->whereUuid('school_uid')
+                    ->whereNumber('member_id');
+                Route::delete('/{school_uid}/members/{member_id}', [SchoolGroupController::class, 'destroyMember'])
+                    ->whereUuid('school_uid')
+                    ->whereNumber('member_id');
+                Route::post('/{school_uid}/sync', [SchoolGroupController::class, 'sync'])
+                    ->whereUuid('school_uid');
+            });
             Route::prefix('monitoring')->group(function () {
                 Route::get('/system', [MonitoringController::class, 'system']);
                 Route::get('/system-history', [MonitoringController::class, 'systemHistory']);

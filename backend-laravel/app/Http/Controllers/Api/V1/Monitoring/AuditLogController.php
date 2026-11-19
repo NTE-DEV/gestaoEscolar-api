@@ -6,10 +6,31 @@ use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use OpenApi\Attributes as OA;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AuditLogController extends Controller
 {
+    #[OA\Get(
+        path: '/api/v1/audit-logs',
+        tags: ['Audit Logs'],
+        summary: 'Listar logs de auditoria paginados',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(name: 'search', in: 'query', required: false, description: 'Busca por usuário, e-mail, ação, descrição ou IP', schema: new OA\Schema(type: 'string')),
+            new OA\Parameter(name: 'app_source', in: 'query', required: false, description: 'Filtro por aplicação de origem (ou ALL)', schema: new OA\Schema(type: 'string')),
+            new OA\Parameter(name: 'action', in: 'query', required: false, description: 'Filtro por ação (CREATE, UPDATE, DELETE, LOGIN, LOGOUT, RESET ou ALL)', schema: new OA\Schema(type: 'string')),
+            new OA\Parameter(name: 'date_from', in: 'query', required: false, description: 'Data inicial (YYYY-MM-DD)', schema: new OA\Schema(type: 'string', format: 'date')),
+            new OA\Parameter(name: 'date_to', in: 'query', required: false, description: 'Data final (YYYY-MM-DD)', schema: new OA\Schema(type: 'string', format: 'date')),
+            new OA\Parameter(name: 'per_page', in: 'query', required: false, description: 'Itens por página (5 a 100)', schema: new OA\Schema(type: 'integer', default: 20, minimum: 5, maximum: 100)),
+            new OA\Parameter(name: 'page', in: 'query', required: false, description: 'Número da página', schema: new OA\Schema(type: 'integer', default: 1)),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Lista paginada de logs de auditoria'),
+            new OA\Response(response: 401, description: 'Não autenticado'),
+            new OA\Response(response: 403, description: 'Sem permissão administrativa'),
+        ]
+    )]
     public function index(Request $request): JsonResponse
     {
         $query = $this->filteredQuery($request);
@@ -22,6 +43,36 @@ class AuditLogController extends Controller
         ]);
     }
 
+    #[OA\Get(
+        path: '/api/v1/audit-logs/stats',
+        tags: ['Audit Logs'],
+        summary: 'Obter contadores agregados de auditoria',
+        security: [['bearerAuth' => []]],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: 'Estatísticas de auditoria',
+                content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'success', type: 'boolean', example: true),
+                        new OA\Property(
+                            property: 'data',
+                            type: 'object',
+                            properties: [
+                                new OA\Property(property: 'total', type: 'integer', example: 1250),
+                                new OA\Property(property: 'today', type: 'integer', example: 34),
+                                new OA\Property(property: 'creates', type: 'integer', example: 400),
+                                new OA\Property(property: 'updates', type: 'integer', example: 320),
+                                new OA\Property(property: 'deletes', type: 'integer', example: 45),
+                            ]
+                        ),
+                    ]
+                )
+            ),
+            new OA\Response(response: 401, description: 'Não autenticado'),
+            new OA\Response(response: 403, description: 'Sem permissão administrativa'),
+        ]
+    )]
     public function stats(): JsonResponse
     {
         return response()->json([
@@ -36,6 +87,21 @@ class AuditLogController extends Controller
         ]);
     }
 
+    #[OA\Get(
+        path: '/api/v1/audit-logs/{id}',
+        tags: ['Audit Logs'],
+        summary: 'Detalhar um log de auditoria',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(name: 'id', in: 'path', required: true, description: 'ID do registro de auditoria', schema: new OA\Schema(type: 'integer')),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Detalhes do log de auditoria'),
+            new OA\Response(response: 401, description: 'Não autenticado'),
+            new OA\Response(response: 403, description: 'Sem permissão administrativa'),
+            new OA\Response(response: 404, description: 'Registro não encontrado'),
+        ]
+    )]
     public function show(int $id): JsonResponse
     {
         $log = AuditLog::findOrFail($id);
@@ -46,6 +112,32 @@ class AuditLogController extends Controller
         ]);
     }
 
+    #[OA\Post(
+        path: '/api/v1/audit-logs',
+        tags: ['Audit Logs'],
+        summary: 'Registrar evento de auditoria de aplicação ou microsserviço',
+        security: [['bearerAuth' => []]],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['app_source', 'action'],
+                properties: [
+                    new OA\Property(property: 'app_source', type: 'string', maxLength: 80, example: 'progpse'),
+                    new OA\Property(property: 'action', type: 'string', maxLength: 40, example: 'CREATE'),
+                    new OA\Property(property: 'resource_type', type: 'string', maxLength: 100, nullable: true, example: 'Project'),
+                    new OA\Property(property: 'resource_id', type: 'string', maxLength: 100, nullable: true, example: '15'),
+                    new OA\Property(property: 'description', type: 'string', maxLength: 1000, nullable: true, example: 'Novo projeto criado.'),
+                    new OA\Property(property: 'old_values', type: 'object', nullable: true),
+                    new OA\Property(property: 'new_values', type: 'object', nullable: true),
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 201, description: 'Log de auditoria registrado'),
+            new OA\Response(response: 401, description: 'Não autenticado'),
+            new OA\Response(response: 422, description: 'Erro de validação'),
+        ]
+    )]
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -83,6 +175,24 @@ class AuditLogController extends Controller
         ], 201);
     }
 
+    #[OA\Get(
+        path: '/api/v1/audit-logs/export',
+        tags: ['Audit Logs'],
+        summary: 'Exportar logs de auditoria em CSV',
+        security: [['bearerAuth' => []]],
+        parameters: [
+            new OA\Parameter(name: 'search', in: 'query', required: false, description: 'Busca por usuário, e-mail, ação, descrição ou IP', schema: new OA\Schema(type: 'string')),
+            new OA\Parameter(name: 'app_source', in: 'query', required: false, description: 'Filtro por aplicação de origem (ou ALL)', schema: new OA\Schema(type: 'string')),
+            new OA\Parameter(name: 'action', in: 'query', required: false, description: 'Filtro por ação (ou ALL)', schema: new OA\Schema(type: 'string')),
+            new OA\Parameter(name: 'date_from', in: 'query', required: false, description: 'Data inicial (YYYY-MM-DD)', schema: new OA\Schema(type: 'string', format: 'date')),
+            new OA\Parameter(name: 'date_to', in: 'query', required: false, description: 'Data final (YYYY-MM-DD)', schema: new OA\Schema(type: 'string', format: 'date')),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Arquivo CSV (text/csv; charset=UTF-8)'),
+            new OA\Response(response: 401, description: 'Não autenticado'),
+            new OA\Response(response: 403, description: 'Sem permissão administrativa'),
+        ]
+    )]
     public function export(Request $request): StreamedResponse
     {
         $rows = $this->filteredQuery($request)->orderByDesc('created_at')->limit(5000)->get();

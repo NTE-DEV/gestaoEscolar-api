@@ -1,0 +1,1591 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "Gestão Escolar API — SEMED Vila Velha",
+        "description": "API Core, Autenticação, Auditoria e Monitoramento de Infraestrutura do Sistema de Gestão Escolar SEMED.",
+        "version": "1.0.0"
+    },
+    "servers": [
+        {
+            "url": "/",
+            "description": "Servidor Local / Direto (/api/v1)"
+        },
+        {
+            "url": "/admin",
+            "description": "Gateway Produção (/admin/api/v1)"
+        },
+        {
+            "url": "/dev/admin",
+            "description": "Gateway Homologação (/dev/admin/api/v1)"
+        }
+    ],
+    "paths": {
+        "/api/v1/auth/login": {
+            "post": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Autenticar usuário via Portal SEMED API",
+                "description": "Valida credenciais no Portal SEMED, sincroniza o usuário local e gera um token Laravel Sanctum.",
+                "operationId": "9d0bb5c770cbec19b0b9566606ef4adb",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "login",
+                                    "password"
+                                ],
+                                "properties": {
+                                    "login": {
+                                        "type": "string",
+                                        "example": "usuario@semed.vilavelha.es.gov.br",
+                                        "maxLength": 150
+                                    },
+                                    "password": {
+                                        "type": "string",
+                                        "format": "password",
+                                        "example": "********",
+                                        "maxLength": 150
+                                    },
+                                    "device_id": {
+                                        "type": "string",
+                                        "example": "web-admin-browser",
+                                        "nullable": true,
+                                        "maxLength": 120
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Login realizado com sucesso",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Login realizado com sucesso."
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "token": {
+                                                    "type": "string",
+                                                    "example": "1|aBcDeFgHiJkLmNoPqRsTuVwXyZ"
+                                                },
+                                                "user": {
+                                                    "properties": {
+                                                        "id": {
+                                                            "type": "integer",
+                                                            "example": 1
+                                                        },
+                                                        "portal_user_id": {
+                                                            "type": "string",
+                                                            "example": "42",
+                                                            "nullable": true
+                                                        },
+                                                        "name": {
+                                                            "type": "string",
+                                                            "example": "Administrador SEMED"
+                                                        },
+                                                        "email": {
+                                                            "type": "string",
+                                                            "format": "email",
+                                                            "example": "admin@semed.vilavelha.es.gov.br"
+                                                        },
+                                                        "cpf": {
+                                                            "type": "string",
+                                                            "example": "00000000000",
+                                                            "nullable": true
+                                                        },
+                                                        "roles": {
+                                                            "type": "array",
+                                                            "items": {
+                                                                "type": "string",
+                                                                "example": "Master"
+                                                            }
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Credenciais inválidas"
+                    },
+                    "422": {
+                        "description": "Erro de validação"
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/me": {
+            "get": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Obter dados do usuário autenticado",
+                "operationId": "7edb820901b8b3a880fc4d7a0a7290fb",
+                "responses": {
+                    "200": {
+                        "description": "Dados do usuário autenticado",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "id": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "portal_user_id": {
+                                                    "type": "string",
+                                                    "example": "42",
+                                                    "nullable": true
+                                                },
+                                                "name": {
+                                                    "type": "string",
+                                                    "example": "Administrador SEMED"
+                                                },
+                                                "email": {
+                                                    "type": "string",
+                                                    "format": "email",
+                                                    "example": "admin@semed.vilavelha.es.gov.br"
+                                                },
+                                                "cpf": {
+                                                    "type": "string",
+                                                    "example": "00000000000",
+                                                    "nullable": true
+                                                },
+                                                "roles": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string",
+                                                        "example": "Master"
+                                                    }
+                                                },
+                                                "last_login_at": {
+                                                    "type": "string",
+                                                    "format": "date-time",
+                                                    "nullable": true
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Não autenticado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/auth/logout": {
+            "post": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Encerrar sessão e revogar token atual",
+                "operationId": "3a27a9e02ceb521eb3f98c8d2394aef9",
+                "responses": {
+                    "200": {
+                        "description": "Logout realizado com sucesso",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Logout realizado com sucesso."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Não autenticado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/auth/group-login": {
+            "post": {
+                "tags": [
+                    "Auth (Group)"
+                ],
+                "summary": "Autenticar usuário por grupo escolar (2 passos)",
+                "description": "Passo 1: valida vínculo ativo do e-mail ou CPF no grupo vinculado ao school_uid. Passo 2: autentica no Portal SEMED e cria sessão Sanctum.",
+                "operationId": "0c826f502e4d520f0e9673666e48aadf",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "school_uid",
+                                    "login",
+                                    "password"
+                                ],
+                                "properties": {
+                                    "school_uid": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "example": "9d8a12b4-4e56-4c89-a123-7890abcdef12"
+                                    },
+                                    "login": {
+                                        "description": "E-mail ou CPF do usuário",
+                                        "type": "string",
+                                        "example": "diretor.escola@semed.vilavelha.es.gov.br",
+                                        "maxLength": 150
+                                    },
+                                    "password": {
+                                        "type": "string",
+                                        "format": "password",
+                                        "example": "********",
+                                        "maxLength": 150
+                                    },
+                                    "device_id": {
+                                        "type": "string",
+                                        "example": "web-escolar",
+                                        "nullable": true,
+                                        "maxLength": 120
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Autenticação realizada e sessão criada",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Autenticação por grupo realizada com sucesso."
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "token": {
+                                                    "type": "string",
+                                                    "example": "12|xYz987654321AbCdEfGhIjKlMnOpQrStUv"
+                                                },
+                                                "token_type": {
+                                                    "type": "string",
+                                                    "example": "Bearer"
+                                                },
+                                                "abilities": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string",
+                                                        "example": "school:9d8a12b4-4e56-4c89-a123-7890abcdef12"
+                                                    }
+                                                },
+                                                "user": {
+                                                    "type": "object"
+                                                },
+                                                "school_group": {
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Credenciais inválidas no Portal SEMED (Passo 2)"
+                    },
+                    "403": {
+                        "description": "Usuário sem vínculo ativo no grupo da escola (Passo 1)"
+                    },
+                    "422": {
+                        "description": "Erro de validação"
+                    },
+                    "503": {
+                        "description": "Portal SEMED indisponível"
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/group-verify": {
+            "post": {
+                "tags": [
+                    "Auth (Group)"
+                ],
+                "summary": "Validar vínculo de usuário em grupo escolar (Passo 1)",
+                "description": "Verifica sem senha se um e-mail ou CPF está vinculado e ativo no grupo da unidade escolar.",
+                "operationId": "3a77be88af7198453e6573b5f4beef84",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "school_uid",
+                                    "login"
+                                ],
+                                "properties": {
+                                    "school_uid": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "example": "9d8a12b4-4e56-4c89-a123-7890abcdef12"
+                                    },
+                                    "login": {
+                                        "description": "E-mail ou CPF do usuário",
+                                        "type": "string",
+                                        "example": "123.456.789-00",
+                                        "maxLength": 150
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Resultado da verificação de vínculo escolar"
+                    },
+                    "401": {
+                        "description": "Não autenticado"
+                    },
+                    "403": {
+                        "description": "Sem permissão administrativa"
+                    },
+                    "422": {
+                        "description": "Erro de validação"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/schools": {
+            "get": {
+                "tags": [
+                    "School Groups"
+                ],
+                "summary": "Listar escolas oficiais via Portal SEMED API",
+                "description": "Consulta e cacheia (5 minutos) a listagem pública de unidades escolares do Portal SEMED para vínculo com school_uid.",
+                "operationId": "703fb3fa4284d3207bd9a469dd74949c",
+                "parameters": [
+                    {
+                        "name": "search",
+                        "in": "query",
+                        "description": "Termo de busca por nome, INEP ou região",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "Número da página",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 1
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "description": "Itens por página (1 a 200)",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 150,
+                            "maximum": 200,
+                            "minimum": 1
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Lista de unidades escolares retornada pelo Portal SEMED"
+                    },
+                    "503": {
+                        "description": "Portal SEMED indisponível"
+                    }
+                }
+            }
+        },
+        "/api/v1/school-groups": {
+            "get": {
+                "tags": [
+                    "School Groups"
+                ],
+                "summary": "Listar grupos escolares cadastrados",
+                "operationId": "80457149c02a61724391aff51968f8a7",
+                "parameters": [
+                    {
+                        "name": "search",
+                        "in": "query",
+                        "description": "Filtrar por school_uid, nome ou INEP",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "description": "Itens por página (5 a 100)",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 20,
+                            "maximum": 100,
+                            "minimum": 5
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Lista paginada de grupos escolares"
+                    },
+                    "401": {
+                        "description": "Não autenticado"
+                    },
+                    "403": {
+                        "description": "Sem permissão administrativa"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/school-groups/{school_uid}/members": {
+            "get": {
+                "tags": [
+                    "School Groups"
+                ],
+                "summary": "Listar membros vinculados a uma unidade escolar",
+                "operationId": "38d7011b744fc286d9ab9215a747e679",
+                "parameters": [
+                    {
+                        "name": "school_uid",
+                        "in": "path",
+                        "description": "UID da unidade escolar",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Grupo e lista de membros vinculados"
+                    },
+                    "401": {
+                        "description": "Não autenticado"
+                    },
+                    "403": {
+                        "description": "Sem permissão administrativa"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "School Groups"
+                ],
+                "summary": "Vincular ou atualizar membro no grupo de uma escola",
+                "operationId": "c589d02cdebe43208c8fccea8f44376a",
+                "parameters": [
+                    {
+                        "name": "school_uid",
+                        "in": "path",
+                        "description": "UID da unidade escolar",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "school_name": {
+                                        "type": "string",
+                                        "example": "UMEF Alger Ribeiro Bossois",
+                                        "nullable": true
+                                    },
+                                    "school_inep": {
+                                        "type": "string",
+                                        "example": "32037710",
+                                        "nullable": true
+                                    },
+                                    "name": {
+                                        "type": "string",
+                                        "example": "Maria da Silva",
+                                        "nullable": true
+                                    },
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email",
+                                        "example": "diretor.escola@semed.vilavelha.es.gov.br",
+                                        "nullable": true
+                                    },
+                                    "cpf": {
+                                        "type": "string",
+                                        "example": "123.456.789-00",
+                                        "nullable": true
+                                    },
+                                    "portal_user_id": {
+                                        "type": "integer",
+                                        "example": 842,
+                                        "nullable": true
+                                    },
+                                    "portal_user_uid": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    },
+                                    "role": {
+                                        "type": "string",
+                                        "example": "Gestor Escolar",
+                                        "nullable": true
+                                    },
+                                    "active": {
+                                        "type": "boolean",
+                                        "example": true,
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Membro vinculado com sucesso"
+                    },
+                    "200": {
+                        "description": "Membro atualizado no grupo"
+                    },
+                    "401": {
+                        "description": "Não autenticado"
+                    },
+                    "403": {
+                        "description": "Sem permissão administrativa"
+                    },
+                    "422": {
+                        "description": "Erro de validação"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/school-groups/{school_uid}/members/{member_id}": {
+            "delete": {
+                "tags": [
+                    "School Groups"
+                ],
+                "summary": "Remover membro de um grupo escolar",
+                "operationId": "e75888bbf4725633ed2b20d3c503d881",
+                "parameters": [
+                    {
+                        "name": "school_uid",
+                        "in": "path",
+                        "description": "UID da unidade escolar",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "member_id",
+                        "in": "path",
+                        "description": "ID do membro no grupo",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Membro removido com sucesso"
+                    },
+                    "401": {
+                        "description": "Não autenticado"
+                    },
+                    "403": {
+                        "description": "Sem permissão administrativa"
+                    },
+                    "404": {
+                        "description": "Membro não encontrado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "patch": {
+                "tags": [
+                    "School Groups"
+                ],
+                "summary": "Atualizar membro de um grupo escolar",
+                "operationId": "be91b92d69ed27ab927e6498cc9652f9",
+                "parameters": [
+                    {
+                        "name": "school_uid",
+                        "in": "path",
+                        "description": "UID da unidade escolar",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "member_id",
+                        "in": "path",
+                        "description": "ID do membro no grupo",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "name": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email",
+                                        "nullable": true
+                                    },
+                                    "cpf": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "role": {
+                                        "type": "string",
+                                        "nullable": true
+                                    },
+                                    "active": {
+                                        "type": "boolean",
+                                        "nullable": true
+                                    },
+                                    "portal_user_id": {
+                                        "type": "integer",
+                                        "nullable": true
+                                    },
+                                    "portal_user_uid": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Membro atualizado com sucesso"
+                    },
+                    "401": {
+                        "description": "Não autenticado"
+                    },
+                    "403": {
+                        "description": "Sem permissão administrativa"
+                    },
+                    "404": {
+                        "description": "Membro não encontrado"
+                    },
+                    "422": {
+                        "description": "Erro de validação"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/school-groups/{school_uid}/sync": {
+            "post": {
+                "tags": [
+                    "School Groups"
+                ],
+                "summary": "Sincronizar membros do grupo escolar via Portal SEMED",
+                "operationId": "f5c09a2c7c9e514f51019fb6216d262a",
+                "parameters": [
+                    {
+                        "name": "school_uid",
+                        "in": "path",
+                        "description": "UID da unidade escolar",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "school_name": {
+                                        "type": "string",
+                                        "example": "UMEF Alger Ribeiro Bossois",
+                                        "nullable": true
+                                    },
+                                    "portal_token": {
+                                        "description": "Token Bearer opcional para sobrescrever PORTAL_API_TOKEN",
+                                        "type": "string",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Sincronização realizada com sucesso"
+                    },
+                    "401": {
+                        "description": "Não autenticado"
+                    },
+                    "403": {
+                        "description": "Sem permissão administrativa"
+                    },
+                    "422": {
+                        "description": "Token do Portal não configurado ou dados inválidos"
+                    },
+                    "503": {
+                        "description": "Falha ao comunicar com o Portal SEMED"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/audit-logs": {
+            "get": {
+                "tags": [
+                    "Audit Logs"
+                ],
+                "summary": "Listar logs de auditoria paginados",
+                "operationId": "7b6a90d6e2996c8c8572b6446bdcf66d",
+                "parameters": [
+                    {
+                        "name": "search",
+                        "in": "query",
+                        "description": "Busca por usuário, e-mail, ação, descrição ou IP",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "app_source",
+                        "in": "query",
+                        "description": "Filtro por aplicação de origem (ou ALL)",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "action",
+                        "in": "query",
+                        "description": "Filtro por ação (CREATE, UPDATE, DELETE, LOGIN, LOGOUT, RESET ou ALL)",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "date_from",
+                        "in": "query",
+                        "description": "Data inicial (YYYY-MM-DD)",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "date_to",
+                        "in": "query",
+                        "description": "Data final (YYYY-MM-DD)",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "description": "Itens por página (5 a 100)",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 20,
+                            "maximum": 100,
+                            "minimum": 5
+                        }
+                    },
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "Número da página",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 1
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Lista paginada de logs de auditoria"
+                    },
+                    "401": {
+                        "description": "Não autenticado"
+                    },
+                    "403": {
+                        "description": "Sem permissão administrativa"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Audit Logs"
+                ],
+                "summary": "Registrar evento de auditoria de aplicação ou microsserviço",
+                "operationId": "1cd01c34ab0c424f22c6a89734b18d50",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "app_source",
+                                    "action"
+                                ],
+                                "properties": {
+                                    "app_source": {
+                                        "type": "string",
+                                        "example": "progpse",
+                                        "maxLength": 80
+                                    },
+                                    "action": {
+                                        "type": "string",
+                                        "example": "CREATE",
+                                        "maxLength": 40
+                                    },
+                                    "resource_type": {
+                                        "type": "string",
+                                        "example": "Project",
+                                        "nullable": true,
+                                        "maxLength": 100
+                                    },
+                                    "resource_id": {
+                                        "type": "string",
+                                        "example": "15",
+                                        "nullable": true,
+                                        "maxLength": 100
+                                    },
+                                    "description": {
+                                        "type": "string",
+                                        "example": "Novo projeto criado.",
+                                        "nullable": true,
+                                        "maxLength": 1000
+                                    },
+                                    "old_values": {
+                                        "type": "object",
+                                        "nullable": true
+                                    },
+                                    "new_values": {
+                                        "type": "object",
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Log de auditoria registrado"
+                    },
+                    "401": {
+                        "description": "Não autenticado"
+                    },
+                    "422": {
+                        "description": "Erro de validação"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/audit-logs/stats": {
+            "get": {
+                "tags": [
+                    "Audit Logs"
+                ],
+                "summary": "Obter contadores agregados de auditoria",
+                "operationId": "3eb2b1502fae21071bc92498e0456926",
+                "responses": {
+                    "200": {
+                        "description": "Estatísticas de auditoria",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "total": {
+                                                    "type": "integer",
+                                                    "example": 1250
+                                                },
+                                                "today": {
+                                                    "type": "integer",
+                                                    "example": 34
+                                                },
+                                                "creates": {
+                                                    "type": "integer",
+                                                    "example": 400
+                                                },
+                                                "updates": {
+                                                    "type": "integer",
+                                                    "example": 320
+                                                },
+                                                "deletes": {
+                                                    "type": "integer",
+                                                    "example": 45
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Não autenticado"
+                    },
+                    "403": {
+                        "description": "Sem permissão administrativa"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/audit-logs/{id}": {
+            "get": {
+                "tags": [
+                    "Audit Logs"
+                ],
+                "summary": "Detalhar um log de auditoria",
+                "operationId": "91c64c88bfa1bb8457315dec6cf42882",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "ID do registro de auditoria",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Detalhes do log de auditoria"
+                    },
+                    "401": {
+                        "description": "Não autenticado"
+                    },
+                    "403": {
+                        "description": "Sem permissão administrativa"
+                    },
+                    "404": {
+                        "description": "Registro não encontrado"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/audit-logs/export": {
+            "get": {
+                "tags": [
+                    "Audit Logs"
+                ],
+                "summary": "Exportar logs de auditoria em CSV",
+                "operationId": "dcb25e32d2fbcc8b8fb98ce0b78e3152",
+                "parameters": [
+                    {
+                        "name": "search",
+                        "in": "query",
+                        "description": "Busca por usuário, e-mail, ação, descrição ou IP",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "app_source",
+                        "in": "query",
+                        "description": "Filtro por aplicação de origem (ou ALL)",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "action",
+                        "in": "query",
+                        "description": "Filtro por ação (ou ALL)",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "date_from",
+                        "in": "query",
+                        "description": "Data inicial (YYYY-MM-DD)",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "date_to",
+                        "in": "query",
+                        "description": "Data final (YYYY-MM-DD)",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Arquivo CSV (text/csv; charset=UTF-8)"
+                    },
+                    "401": {
+                        "description": "Não autenticado"
+                    },
+                    "403": {
+                        "description": "Sem permissão administrativa"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/monitoring/system": {
+            "get": {
+                "tags": [
+                    "Monitoring"
+                ],
+                "summary": "Obter snapshot em tempo real do servidor",
+                "description": "Retorna métricas instantâneas de CPU, memória, disco e uptime do host.",
+                "operationId": "23196a21f212ae92328212d56b361a6c",
+                "responses": {
+                    "200": {
+                        "description": "Snapshot de métricas do host"
+                    },
+                    "401": {
+                        "description": "Não autenticado"
+                    },
+                    "403": {
+                        "description": "Sem permissão administrativa"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/monitoring/system-history": {
+            "get": {
+                "tags": [
+                    "Monitoring"
+                ],
+                "summary": "Obter histórico diário consolidado de CPU e memória",
+                "operationId": "6813d3a1238b8e25f45a5c9eb5dd29ce",
+                "parameters": [
+                    {
+                        "name": "days",
+                        "in": "query",
+                        "description": "Janela em dias (5 a 60)",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 20,
+                            "maximum": 60,
+                            "minimum": 5
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Histórico consolidado de métricas do host"
+                    },
+                    "401": {
+                        "description": "Não autenticado"
+                    },
+                    "403": {
+                        "description": "Sem permissão administrativa"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/monitoring/docker": {
+            "get": {
+                "tags": [
+                    "Monitoring"
+                ],
+                "summary": "Listar containers Docker monitorados",
+                "operationId": "2219aed12ed70a2c0e6c7dbe79e492e3",
+                "responses": {
+                    "200": {
+                        "description": "Lista de containers e respectivos status"
+                    },
+                    "401": {
+                        "description": "Não autenticado"
+                    },
+                    "403": {
+                        "description": "Sem permissão administrativa"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/monitoring/docker/{id}/logs": {
+            "get": {
+                "tags": [
+                    "Monitoring"
+                ],
+                "summary": "Obter logs recentes de um container Docker (Master)",
+                "description": "Acesso restrito a usuários com perfil Master.",
+                "operationId": "112ffa8f75e8b005d31c65c9e5be3923",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "ID ou nome do container Docker",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "tail",
+                        "in": "query",
+                        "description": "Quantidade de linhas recentes",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 100
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Logs do container"
+                    },
+                    "401": {
+                        "description": "Não autenticado"
+                    },
+                    "403": {
+                        "description": "Acesso restrito ao perfil Master"
+                    },
+                    "500": {
+                        "description": "Erro ao consultar logs do Docker Engine"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/monitoring/requests/stats": {
+            "get": {
+                "tags": [
+                    "Monitoring"
+                ],
+                "summary": "Obter estatísticas agregadas de requisições da API",
+                "operationId": "1bc9cd8dc7c5ec8ba7d39e585f7f3971",
+                "responses": {
+                    "200": {
+                        "description": "Métricas de volume, erros, latência média, usuários ativos e top rotas/serviços"
+                    },
+                    "401": {
+                        "description": "Não autenticado"
+                    },
+                    "403": {
+                        "description": "Sem permissão administrativa"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/monitoring/requests/daily": {
+            "get": {
+                "tags": [
+                    "Monitoring"
+                ],
+                "summary": "Obter série diária de requisições e erros HTTP",
+                "operationId": "20e4c2b449a330877c3c14678806b04f",
+                "parameters": [
+                    {
+                        "name": "days",
+                        "in": "query",
+                        "description": "Janela em dias (5 a 60)",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 20,
+                            "maximum": 60,
+                            "minimum": 5
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Série diária de totais e erros"
+                    },
+                    "401": {
+                        "description": "Não autenticado"
+                    },
+                    "403": {
+                        "description": "Sem permissão administrativa"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/monitoring/requests/top-ips": {
+            "get": {
+                "tags": [
+                    "Monitoring"
+                ],
+                "summary": "Listar IPs com maior volume de requisições",
+                "operationId": "184b741b5d6a9494cbd9beedf76e689c",
+                "parameters": [
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "description": "Limite de registros (5 a 100)",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 20,
+                            "maximum": 100,
+                            "minimum": 5
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Ranking de IPs por volume de requisições"
+                    },
+                    "401": {
+                        "description": "Não autenticado"
+                    },
+                    "403": {
+                        "description": "Sem permissão administrativa"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/monitoring/requests/reset": {
+            "post": {
+                "tags": [
+                    "Monitoring"
+                ],
+                "summary": "Reiniciar histórico de métricas de requisições (Master)",
+                "description": "Trunca a tabela de logs de requisições e grava evento de auditoria. Restrito ao perfil Master.",
+                "operationId": "eff8bbf90ea6de11e60e7a973b280718",
+                "responses": {
+                    "200": {
+                        "description": "Métricas resetadas com sucesso",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Métricas de requisições resetadas com sucesso."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Não autenticado"
+                    },
+                    "403": {
+                        "description": "Acesso restrito ao perfil Master"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/monitoring/storage": {
+            "get": {
+                "tags": [
+                    "Monitoring"
+                ],
+                "summary": "Analisar uso de armazenamento em disco dos módulos",
+                "operationId": "8a5633962260d39d4ae1b909ba278fb4",
+                "responses": {
+                    "200": {
+                        "description": "Relatório de utilização de armazenamento"
+                    },
+                    "401": {
+                        "description": "Não autenticado"
+                    },
+                    "403": {
+                        "description": "Sem permissão administrativa"
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/health": {
+            "get": {
+                "tags": [
+                    "Health & Status"
+                ],
+                "summary": "Health check da API Gestão Escolar",
+                "description": "Verifica se a API Gestão Escolar está operacional.",
+                "operationId": "90507dc3c7b17046d88f3f332ab66e0d",
+                "responses": {
+                    "200": {
+                        "description": "Serviço operacional",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "service": {
+                                            "type": "string",
+                                            "example": "gestao-escolar-api"
+                                        },
+                                        "timestamp": {
+                                            "type": "string",
+                                            "format": "date-time",
+                                            "example": "2026-11-18T16:20:00+00:00"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "securitySchemes": {
+            "bearerAuth": {
+                "type": "http",
+                "description": "Informe o token Bearer retornado no endpoint /api/v1/auth/login",
+                "bearerFormat": "Sanctum",
+                "scheme": "bearer"
+            }
+        }
+    },
+    "tags": [
+        {
+            "name": "Auth",
+            "description": "Auth"
+        },
+        {
+            "name": "Auth (Group)",
+            "description": "Auth (Group)"
+        },
+        {
+            "name": "School Groups",
+            "description": "School Groups"
+        },
+        {
+            "name": "Audit Logs",
+            "description": "Audit Logs"
+        },
+        {
+            "name": "Monitoring",
+            "description": "Monitoring"
+        },
+        {
+            "name": "Health & Status",
+            "description": "Health & Status"
+        }
+    ]
+}
