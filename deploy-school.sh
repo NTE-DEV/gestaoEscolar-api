@@ -84,7 +84,8 @@ if [[ "$ENVIRONMENT" == "homolog" ]]; then
     WEB_SERVICE="gestao-escolar-web-homolog"
     ADMIN_URL="https://gedu.vilavelha.es.gov.br/dev/admin/"
     API_URL="https://gedu.vilavelha.es.gov.br/GE/dev/v1"
-    SWAGGER_URL="https://gedu.vilavelha.es.gov.br/dev/admin/api/documentation"
+    SWAGGER_URL="https://gedu.vilavelha.es.gov.br/GE/dev/v1/documentation"
+    SWAGGER_ADMIN_URL="https://gedu.vilavelha.es.gov.br/dev/admin/api/documentation"
 else
     TARGET_BRANCH="main"
     COMPOSE_FILE="docker-compose.yml"
@@ -95,7 +96,8 @@ else
     WEB_SERVICE="gestao-escolar-web"
     ADMIN_URL="https://gedu.vilavelha.es.gov.br/admin/"
     API_URL="https://gedu.vilavelha.es.gov.br/GE/v1"
-    SWAGGER_URL="https://gedu.vilavelha.es.gov.br/admin/api/documentation"
+    SWAGGER_URL="https://gedu.vilavelha.es.gov.br/GE/v1/documentation"
+    SWAGGER_ADMIN_URL="https://gedu.vilavelha.es.gov.br/admin/api/documentation"
 fi
 
 BACKUP_DIR="/var/backups/gestao-escolar"
@@ -276,7 +278,8 @@ fi
 
 echo "============================================================"
 echo "🎉 Deploy concluído: $APP_LABEL"
-echo "   • Painel Admin: $ADMIN_URL"
-echo "   • API Base:     $API_URL"
-echo "   • Swagger UI:   $SWAGGER_URL"
+echo "   • Painel Admin:    $ADMIN_URL"
+echo "   • API Base:        $API_URL"
+echo "   • Swagger (API):   $SWAGGER_URL"
+echo "   • Swagger (Admin): $SWAGGER_ADMIN_URL"
 echo "============================================================"

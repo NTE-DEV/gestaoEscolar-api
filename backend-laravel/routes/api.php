@@ -13,7 +13,16 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 */
 Route::prefix('v1')->group(function () {
-    Route::redirect('/documentation', '/api/documentation');
+    // Documentação Swagger / OpenAPI (/GE/v1/documentation e /GE/dev/v1/documentation)
+    Route::group([
+        'l5-swagger.documentation' => 'default',
+        'middleware' => [\L5Swagger\Http\Middleware\Config::class],
+    ], function () {
+        Route::get('/documentation', [\L5Swagger\Http\Controllers\SwaggerController::class, 'api']);
+        Route::get('/docs', [\L5Swagger\Http\Controllers\SwaggerController::class, 'docs']);
+        Route::get('/docs/asset/{asset}', [\L5Swagger\Http\Controllers\SwaggerAssetController::class, 'index']);
+        Route::get('/oauth2-callback', [\L5Swagger\Http\Controllers\SwaggerController::class, 'oauth2Callback']);
+    });
 
     Route::get('/health', fn() => response()->json([
         'success' => true,
