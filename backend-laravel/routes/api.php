@@ -30,8 +30,9 @@ Route::prefix('v1')->group(function () {
         'timestamp' => now()->toIso8601String(),
     ]));
 
-    // Lista oficial de unidades escolares (Portal Semed API com cache)
+    // Lista oficial de unidades (Escolas e Setores via Portal Semed API com cache)
     Route::get('/schools', [SchoolGroupController::class, 'schools']);
+    Route::get('/units', [SchoolGroupController::class, 'schools']);
 
     // Autenticação via Portal Semed API
     Route::post('/auth/login', [AuthController::class, 'login']);

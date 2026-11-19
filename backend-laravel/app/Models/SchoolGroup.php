@@ -10,6 +10,7 @@ class SchoolGroup extends Model
     protected $fillable = [
         'school_uid',
         'school_name',
+        'unit_type',
         'school_inep',
         'active',
         'last_synced_at',
@@ -24,7 +25,7 @@ class SchoolGroup extends Model
     }
 
     /**
-     * Membros vinculados ao grupo desta unidade escolar.
+     * Membros vinculados ao grupo desta unidade escolar ou setorial.
      */
     public function members(): HasMany
     {

@@ -254,8 +254,8 @@
                 "tags": [
                     "Auth (Group)"
                 ],
-                "summary": "Autenticar usuário por grupo escolar (2 passos)",
-                "description": "Passo 1: valida vínculo ativo do e-mail ou CPF no grupo vinculado ao school_uid. Passo 2: autentica no Portal SEMED e cria sessão Sanctum.",
+                "summary": "Autenticar usuário por grupo de unidade (escola ou setor) — 2 passos",
+                "description": "Passo 1: valida vínculo ativo do e-mail ou CPF no grupo vinculado à unidade (escola ou setor). Passo 2: autentica no Portal SEMED e cria sessão Sanctum.",
                 "operationId": "0c826f502e4d520f0e9673666e48aadf",
                 "requestBody": {
                     "required": true,
@@ -263,15 +263,23 @@
                         "application/json": {
                             "schema": {
                                 "required": [
-                                    "school_uid",
                                     "login",
                                     "password"
                                 ],
                                 "properties": {
-                                    "school_uid": {
+                                    "unit_uid": {
+                                        "description": "UID da unidade (escola ou setor)",
                                         "type": "string",
                                         "format": "uuid",
-                                        "example": "9d8a12b4-4e56-4c89-a123-7890abcdef12"
+                                        "example": "9d8a12b4-4e56-4c89-a123-7890abcdef12",
+                                        "nullable": true
+                                    },
+                                    "school_uid": {
+                                        "description": "Alias retrocompatível para unit_uid",
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "example": "9d8a12b4-4e56-4c89-a123-7890abcdef12",
+                                        "nullable": true
                                     },
                                     "login": {
                                         "description": "E-mail ou CPF do usuário",
@@ -326,10 +334,13 @@
                                                     "type": "array",
                                                     "items": {
                                                         "type": "string",
-                                                        "example": "school:9d8a12b4-4e56-4c89-a123-7890abcdef12"
+                                                        "example": "unit:9d8a12b4-4e56-4c89-a123-7890abcdef12"
                                                     }
                                                 },
                                                 "user": {
+                                                    "type": "object"
+                                                },
+                                                "unit_group": {
                                                     "type": "object"
                                                 },
                                                 "school_group": {
@@ -348,7 +359,7 @@
                         "description": "Credenciais inválidas no Portal SEMED (Passo 2)"
                     },
                     "403": {
-                        "description": "Usuário sem vínculo ativo no grupo da escola (Passo 1)"
+                        "description": "Usuário sem vínculo ativo no grupo da unidade (Passo 1)"
                     },
                     "422": {
                         "description": "Erro de validação"
@@ -364,8 +375,8 @@
                 "tags": [
                     "Auth (Group)"
                 ],
-                "summary": "Validar vínculo de usuário em grupo escolar (Passo 1)",
-                "description": "Verifica sem senha se um e-mail ou CPF está vinculado e ativo no grupo da unidade escolar.",
+                "summary": "Validar vínculo de usuário em grupo de unidade (Passo 1)",
+                "description": "Verifica sem senha se um e-mail ou CPF está vinculado e ativo no grupo da unidade (escola ou setor).",
                 "operationId": "3a77be88af7198453e6573b5f4beef84",
                 "requestBody": {
                     "required": true,
@@ -373,14 +384,22 @@
                         "application/json": {
                             "schema": {
                                 "required": [
-                                    "school_uid",
                                     "login"
                                 ],
                                 "properties": {
-                                    "school_uid": {
+                                    "unit_uid": {
+                                        "description": "UID da unidade (escola ou setor)",
                                         "type": "string",
                                         "format": "uuid",
-                                        "example": "9d8a12b4-4e56-4c89-a123-7890abcdef12"
+                                        "example": "9d8a12b4-4e56-4c89-a123-7890abcdef12",
+                                        "nullable": true
+                                    },
+                                    "school_uid": {
+                                        "description": "Alias retrocompatível",
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "example": "9d8a12b4-4e56-4c89-a123-7890abcdef12",
+                                        "nullable": true
                                     },
                                     "login": {
                                         "description": "E-mail ou CPF do usuário",
@@ -396,7 +415,7 @@
                 },
                 "responses": {
                     "200": {
-                        "description": "Resultado da verificação de vínculo escolar"
+                        "description": "Resultado da verificação de vínculo"
                     },
                     "401": {
                         "description": "Não autenticado"
@@ -420,17 +439,32 @@
                 "tags": [
                     "School Groups"
                 ],
-                "summary": "Listar escolas oficiais via Portal SEMED API",
-                "description": "Consulta e cacheia (5 minutos) a listagem pública de unidades escolares do Portal SEMED para vínculo com school_uid.",
+                "summary": "Listar unidades (escolas e setores) via Portal SEMED API",
+                "description": "Consulta e cacheia a listagem unificada de unidades públicas (escolas e setores administrativos da SEMED) para seleção e vínculo com unit_uid/school_uid.",
                 "operationId": "703fb3fa4284d3207bd9a469dd74949c",
                 "parameters": [
                     {
                         "name": "search",
                         "in": "query",
-                        "description": "Termo de busca por nome, INEP ou região",
+                        "description": "Termo de busca por nome, código/INEP ou e-mail",
                         "required": false,
                         "schema": {
                             "type": "string"
+                        }
+                    },
+                    {
+                        "name": "type",
+                        "in": "query",
+                        "description": "Filtrar por tipo: all (padrão, escolas e setores), school (somente escolas) ou sector (somente setores)",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "default": "all",
+                            "enum": [
+                                "all",
+                                "school",
+                                "sector"
+                            ]
                         }
                     },
                     {
@@ -446,19 +480,19 @@
                     {
                         "name": "per_page",
                         "in": "query",
-                        "description": "Itens por página (1 a 200)",
+                        "description": "Itens por página (1 a 250)",
                         "required": false,
                         "schema": {
                             "type": "integer",
                             "default": 150,
-                            "maximum": 200,
+                            "maximum": 250,
                             "minimum": 1
                         }
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "Lista de unidades escolares retornada pelo Portal SEMED"
+                        "description": "Lista unificada de escolas e setores retornada pelo Portal SEMED"
                     },
                     "503": {
                         "description": "Portal SEMED indisponível"
@@ -471,16 +505,29 @@
                 "tags": [
                     "School Groups"
                 ],
-                "summary": "Listar grupos escolares cadastrados",
+                "summary": "Listar grupos cadastrados (escolas e setores)",
                 "operationId": "80457149c02a61724391aff51968f8a7",
                 "parameters": [
                     {
                         "name": "search",
                         "in": "query",
-                        "description": "Filtrar por school_uid, nome ou INEP",
+                        "description": "Filtrar por UID, nome ou INEP/sigla",
                         "required": false,
                         "schema": {
                             "type": "string"
+                        }
+                    },
+                    {
+                        "name": "unit_type",
+                        "in": "query",
+                        "description": "Filtrar por unit_type: school ou sector",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "school",
+                                "sector"
+                            ]
                         }
                     },
                     {
@@ -498,7 +545,7 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "Lista paginada de grupos escolares"
+                        "description": "Lista paginada de grupos"
                     },
                     "401": {
                         "description": "Não autenticado"
@@ -519,13 +566,13 @@
                 "tags": [
                     "School Groups"
                 ],
-                "summary": "Listar membros vinculados a uma unidade escolar",
+                "summary": "Listar membros vinculados a uma unidade (escola ou setor)",
                 "operationId": "38d7011b744fc286d9ab9215a747e679",
                 "parameters": [
                     {
                         "name": "school_uid",
                         "in": "path",
-                        "description": "UID da unidade escolar",
+                        "description": "UID da unidade (escola ou setor)",
                         "required": true,
                         "schema": {
                             "type": "string",
@@ -554,13 +601,13 @@
                 "tags": [
                     "School Groups"
                 ],
-                "summary": "Vincular ou atualizar membro no grupo de uma escola",
+                "summary": "Vincular ou atualizar membro no grupo de uma unidade",
                 "operationId": "c589d02cdebe43208c8fccea8f44376a",
                 "parameters": [
                     {
                         "name": "school_uid",
                         "in": "path",
-                        "description": "UID da unidade escolar",
+                        "description": "UID da unidade (escola ou setor)",
                         "required": true,
                         "schema": {
                             "type": "string",
@@ -578,6 +625,15 @@
                                         "type": "string",
                                         "example": "UMEF Alger Ribeiro Bossois",
                                         "nullable": true
+                                    },
+                                    "unit_type": {
+                                        "type": "string",
+                                        "example": "school",
+                                        "nullable": true,
+                                        "enum": [
+                                            "school",
+                                            "sector"
+                                        ]
                                     },
                                     "school_inep": {
                                         "type": "string",
@@ -655,13 +711,13 @@
                 "tags": [
                     "School Groups"
                 ],
-                "summary": "Remover membro de um grupo escolar",
+                "summary": "Remover membro de um grupo de unidade",
                 "operationId": "e75888bbf4725633ed2b20d3c503d881",
                 "parameters": [
                     {
                         "name": "school_uid",
                         "in": "path",
-                        "description": "UID da unidade escolar",
+                        "description": "UID da unidade",
                         "required": true,
                         "schema": {
                             "type": "string",
@@ -680,7 +736,7 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "Membro removido com sucesso"
+                        "description": "Membro removido do grupo"
                     },
                     "401": {
                         "description": "Não autenticado"
@@ -702,13 +758,13 @@
                 "tags": [
                     "School Groups"
                 ],
-                "summary": "Atualizar membro de um grupo escolar",
+                "summary": "Atualizar membro de um grupo de unidade",
                 "operationId": "be91b92d69ed27ab927e6498cc9652f9",
                 "parameters": [
                     {
                         "name": "school_uid",
                         "in": "path",
-                        "description": "UID da unidade escolar",
+                        "description": "UID da unidade (escola ou setor)",
                         "required": true,
                         "schema": {
                             "type": "string",
@@ -769,7 +825,7 @@
                 },
                 "responses": {
                     "200": {
-                        "description": "Membro atualizado com sucesso"
+                        "description": "Membro atualizado"
                     },
                     "401": {
                         "description": "Não autenticado"
@@ -796,13 +852,13 @@
                 "tags": [
                     "School Groups"
                 ],
-                "summary": "Sincronizar membros do grupo escolar via Portal SEMED",
+                "summary": "Sincronizar membros do grupo via Portal SEMED",
                 "operationId": "f5c09a2c7c9e514f51019fb6216d262a",
                 "parameters": [
                     {
                         "name": "school_uid",
                         "in": "path",
-                        "description": "UID da unidade escolar",
+                        "description": "UID da unidade (escola ou setor)",
                         "required": true,
                         "schema": {
                             "type": "string",
@@ -820,6 +876,15 @@
                                         "type": "string",
                                         "example": "UMEF Alger Ribeiro Bossois",
                                         "nullable": true
+                                    },
+                                    "unit_type": {
+                                        "type": "string",
+                                        "nullable": true,
+                                        "default": "school",
+                                        "enum": [
+                                            "school",
+                                            "sector"
+                                        ]
                                     },
                                     "portal_token": {
                                         "description": "Token Bearer opcional para sobrescrever PORTAL_API_TOKEN",
