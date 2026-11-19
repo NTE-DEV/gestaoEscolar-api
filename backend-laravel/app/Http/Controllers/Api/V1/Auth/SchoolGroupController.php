@@ -24,7 +24,7 @@ class SchoolGroupController extends Controller
             new OA\Parameter(name: 'search', in: 'query', required: false, description: 'Termo de busca por nome, código/INEP ou e-mail', schema: new OA\Schema(type: 'string')),
             new OA\Parameter(name: 'type', in: 'query', required: false, description: 'Filtrar por tipo: all (padrão, escolas e setores), school (somente escolas) ou sector (somente setores)', schema: new OA\Schema(type: 'string', enum: ['all', 'school', 'sector'], default: 'all')),
             new OA\Parameter(name: 'page', in: 'query', required: false, description: 'Número da página', schema: new OA\Schema(type: 'integer', default: 1)),
-            new OA\Parameter(name: 'per_page', in: 'query', required: false, description: 'Itens por página (1 a 250)', schema: new OA\Schema(type: 'integer', default: 150, minimum: 1, maximum: 250)),
+            new OA\Parameter(name: 'per_page', in: 'query', required: false, description: 'Itens por página (1 a 500)', schema: new OA\Schema(type: 'integer', default: 500, minimum: 1, maximum: 500)),
         ],
         responses: [
             new OA\Response(response: 200, description: 'Lista unificada de escolas e setores retornada pelo Portal SEMED'),
@@ -36,7 +36,7 @@ class SchoolGroupController extends Controller
         $search = $request->query('search');
         $type = $request->query('type', 'all');
         $page = max(1, $request->integer('page', 1));
-        $perPage = min(max(1, $request->integer('per_page', 150)), 250);
+        $perPage = min(max(1, $request->integer('per_page', 500)), 500);
 
         $result = $portalAuth->fetchPublicUnits($search, $type, $page, $perPage);
 

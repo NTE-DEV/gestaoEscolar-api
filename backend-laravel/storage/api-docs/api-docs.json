@@ -480,12 +480,12 @@
                     {
                         "name": "per_page",
                         "in": "query",
-                        "description": "Itens por página (1 a 250)",
+                        "description": "Itens por página (1 a 500)",
                         "required": false,
                         "schema": {
                             "type": "integer",
-                            "default": 150,
-                            "maximum": 250,
+                            "default": 500,
+                            "maximum": 500,
                             "minimum": 1
                         }
                     }

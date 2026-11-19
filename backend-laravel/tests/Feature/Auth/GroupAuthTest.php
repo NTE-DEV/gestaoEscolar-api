@@ -522,4 +522,73 @@ class GroupAuthTest extends TestCase
             'resource_id' => $this->schoolUid,
         ]);
     }
+
+    public function test_schools_endpoint_fetches_all_paginated_pages_from_portal(): void
+    {
+        Cache::flush();
+
+        Http::fake([
+            '*/api/v1/publics/schools*' => function (HttpClientRequest $request) {
+                parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
+                $page = (int) ($query['page'] ?? 1);
+
+                $pages = [
+                    1 => [
+                        ['id' => 1, 'uid' => '11111111-1111-4111-8111-111111111101', 'name' => 'Escola A', 'type' => 'UMEF', 'inep' => '1001'],
+                        ['id' => 2, 'uid' => '11111111-1111-4111-8111-111111111102', 'name' => 'Escola B', 'type' => 'UMEF', 'inep' => '1002'],
+                    ],
+                    2 => [
+                        ['id' => 3, 'uid' => '11111111-1111-4111-8111-111111111103', 'name' => 'Escola C', 'type' => 'UMEI', 'inep' => '1003'],
+                        ['id' => 4, 'uid' => '11111111-1111-4111-8111-111111111104', 'name' => 'Escola D', 'type' => 'UMEI', 'inep' => '1004'],
+                    ],
+                    3 => [
+                        ['id' => 5, 'uid' => '11111111-1111-4111-8111-111111111105', 'name' => 'Escola E', 'type' => 'UMEF', 'inep' => '1005'],
+                    ],
+                ];
+
+                return Http::response([
+                    'success' => true,
+                    'data' => [
+                        'current_page' => $page,
+                        'last_page' => 3,
+                        'per_page' => 2,
+                        'total' => 5,
+                        'data' => $pages[$page] ?? [],
+                    ],
+                ], 200);
+            },
+            '*/api/v1/publics/sectors*' => function (HttpClientRequest $request) {
+                parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
+                $page = (int) ($query['page'] ?? 1);
+
+                $pages = [
+                    1 => [
+                        ['id' => 10, 'uid' => '22222222-2222-4222-8222-222222222201', 'name' => 'Setor Alpha', 'type' => 'coordenacao'],
+                    ],
+                    2 => [
+                        ['id' => 11, 'uid' => '22222222-2222-4222-8222-222222222202', 'name' => 'Setor Beta', 'type' => 'gerencia'],
+                    ],
+                ];
+
+                return Http::response([
+                    'success' => true,
+                    'data' => [
+                        'current_page' => $page,
+                        'last_page' => 2,
+                        'per_page' => 1,
+                        'total' => 2,
+                        'data' => $pages[$page] ?? [],
+                    ],
+                ], 200);
+            },
+        ]);
+
+        $res = $this->getJson('/api/v1/units');
+        $res->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('meta.total_schools', 5)
+            ->assertJsonPath('meta.total_sectors', 2)
+            ->assertJsonPath('meta.total_units', 7)
+            ->assertJsonCount(7, 'data');
+    }
 }
