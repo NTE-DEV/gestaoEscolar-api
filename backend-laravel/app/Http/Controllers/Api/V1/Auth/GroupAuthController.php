@@ -16,14 +16,15 @@ class GroupAuthController extends Controller
     #[OA\Post(
         path: '/api/v1/auth/group-login',
         tags: ['Auth (Group)'],
-        summary: 'Autenticar usuário por grupo escolar (2 passos)',
-        description: 'Passo 1: valida vínculo ativo do e-mail ou CPF no grupo vinculado ao school_uid. Passo 2: autentica no Portal SEMED e cria sessão Sanctum.',
+        summary: 'Autenticar usuário por grupo de unidade (escola ou setor) — 2 passos',
+        description: 'Passo 1: valida vínculo ativo do e-mail ou CPF no grupo vinculado à unidade (escola ou setor). Passo 2: autentica no Portal SEMED e cria sessão Sanctum.',
         requestBody: new OA\RequestBody(
             required: true,
             content: new OA\JsonContent(
-                required: ['school_uid', 'login', 'password'],
+                required: ['login', 'password'],
                 properties: [
-                    new OA\Property(property: 'school_uid', type: 'string', format: 'uuid', example: '9d8a12b4-4e56-4c89-a123-7890abcdef12'),
+                    new OA\Property(property: 'unit_uid', type: 'string', format: 'uuid', nullable: true, example: '9d8a12b4-4e56-4c89-a123-7890abcdef12', description: 'UID da unidade (escola ou setor)'),
+                    new OA\Property(property: 'school_uid', type: 'string', format: 'uuid', nullable: true, example: '9d8a12b4-4e56-4c89-a123-7890abcdef12', description: 'Alias retrocompatível para unit_uid'),
                     new OA\Property(property: 'login', type: 'string', maxLength: 150, example: 'diretor.escola@semed.vilavelha.es.gov.br', description: 'E-mail ou CPF do usuário'),
                     new OA\Property(property: 'password', type: 'string', format: 'password', maxLength: 150, example: '********'),
                     new OA\Property(property: 'device_id', type: 'string', maxLength: 120, nullable: true, example: 'web-escolar'),
@@ -44,8 +45,9 @@ class GroupAuthController extends Controller
                             properties: [
                                 new OA\Property(property: 'token', type: 'string', example: '12|xYz987654321AbCdEfGhIjKlMnOpQrStUv'),
                                 new OA\Property(property: 'token_type', type: 'string', example: 'Bearer'),
-                                new OA\Property(property: 'abilities', type: 'array', items: new OA\Items(type: 'string', example: 'school:9d8a12b4-4e56-4c89-a123-7890abcdef12')),
+                                new OA\Property(property: 'abilities', type: 'array', items: new OA\Items(type: 'string', example: 'unit:9d8a12b4-4e56-4c89-a123-7890abcdef12')),
                                 new OA\Property(property: 'user', type: 'object'),
+                                new OA\Property(property: 'unit_group', type: 'object'),
                                 new OA\Property(property: 'school_group', type: 'object'),
                             ]
                         ),
@@ -53,7 +55,7 @@ class GroupAuthController extends Controller
                 )
             ),
             new OA\Response(response: 401, description: 'Credenciais inválidas no Portal SEMED (Passo 2)'),
-            new OA\Response(response: 403, description: 'Usuário sem vínculo ativo no grupo da escola (Passo 1)'),
+            new OA\Response(response: 403, description: 'Usuário sem vínculo ativo no grupo da unidade (Passo 1)'),
             new OA\Response(response: 422, description: 'Erro de validação'),
             new OA\Response(response: 503, description: 'Portal SEMED indisponível'),
         ]
@@ -68,14 +70,14 @@ class GroupAuthController extends Controller
         $rawLogin = $validated['login'];
         $normalized = $groupAuth->normalizeLogin($rawLogin);
 
-        // Passo 1: Fail-Fast validando vínculo ativo no grupo da unidade escolar antes de chamar o Portal SEMED.
+        // Passo 1: Fail-Fast validando vínculo ativo no grupo da unidade (escola ou setor) antes de chamar o Portal SEMED.
         $member = $groupAuth->verifyGroupMembership($schoolUid, $rawLogin);
 
         if (! $member) {
             $groupAuth->recordAudit(
                 $request,
                 'LOGIN_GROUP_DENIED',
-                "Tentativa de login negada no Passo 1 (sem vínculo ativo para school_uid {$schoolUid}).",
+                "Tentativa de login negada no Passo 1 (sem vínculo ativo para unit_uid {$schoolUid}).",
                 'SchoolGroup',
                 $schoolUid,
                 userName: $normalized['value'] ?: $rawLogin,
@@ -84,7 +86,7 @@ class GroupAuthController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Usuário não possui vínculo ativo no grupo da unidade escolar informada.',
+                'message' => 'Usuário não possui vínculo ativo no grupo da unidade informada.',
                 'step' => 'school_group_validation',
             ], 403);
         }
@@ -131,7 +133,7 @@ class GroupAuthController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Identidade autenticada não corresponde ao membro vinculado ao grupo escolar.',
+                'message' => 'Identidade autenticada não corresponde ao membro vinculado ao grupo da unidade.',
                 'step' => 'school_group_validation',
             ], 403);
         }
@@ -144,10 +146,12 @@ class GroupAuthController extends Controller
             $validated['device_id'] ?? null
         );
 
+        $unitType = $member->group->unit_type ?? 'school';
+
         $groupAuth->recordAudit(
             $request,
             'LOGIN_GROUP',
-            "Autenticação por grupo escolar realizada ({$schoolUid} — papel {$member->role}).",
+            "Autenticação por grupo de unidade realizada ({$schoolUid} — papel {$member->role} — tipo {$unitType}).",
             'SchoolGroup',
             $schoolUid,
             user: $session['user'],
@@ -168,6 +172,13 @@ class GroupAuthController extends Controller
                     'cpf' => $session['user']->cpf,
                     'roles' => $session['user']->roles,
                 ],
+                'unit_group' => [
+                    'id' => $member->group->id,
+                    'uid' => $member->school_uid,
+                    'name' => $member->group->school_name,
+                    'type' => $unitType,
+                    'member_role' => $member->role,
+                ],
                 'school_group' => [
                     'id' => $member->group->id,
                     'school_uid' => $member->school_uid,
@@ -181,21 +192,22 @@ class GroupAuthController extends Controller
     #[OA\Post(
         path: '/api/v1/auth/group-verify',
         tags: ['Auth (Group)'],
-        summary: 'Validar vínculo de usuário em grupo escolar (Passo 1)',
-        description: 'Verifica sem senha se um e-mail ou CPF está vinculado e ativo no grupo da unidade escolar.',
+        summary: 'Validar vínculo de usuário em grupo de unidade (Passo 1)',
+        description: 'Verifica sem senha se um e-mail ou CPF está vinculado e ativo no grupo da unidade (escola ou setor).',
         security: [['bearerAuth' => []]],
         requestBody: new OA\RequestBody(
             required: true,
             content: new OA\JsonContent(
-                required: ['school_uid', 'login'],
+                required: ['login'],
                 properties: [
-                    new OA\Property(property: 'school_uid', type: 'string', format: 'uuid', example: '9d8a12b4-4e56-4c89-a123-7890abcdef12'),
+                    new OA\Property(property: 'unit_uid', type: 'string', format: 'uuid', nullable: true, example: '9d8a12b4-4e56-4c89-a123-7890abcdef12', description: 'UID da unidade (escola ou setor)'),
+                    new OA\Property(property: 'school_uid', type: 'string', format: 'uuid', nullable: true, example: '9d8a12b4-4e56-4c89-a123-7890abcdef12', description: 'Alias retrocompatível'),
                     new OA\Property(property: 'login', type: 'string', maxLength: 150, example: '123.456.789-00', description: 'E-mail ou CPF do usuário'),
                 ]
             )
         ),
         responses: [
-            new OA\Response(response: 200, description: 'Resultado da verificação de vínculo escolar'),
+            new OA\Response(response: 200, description: 'Resultado da verificação de vínculo'),
             new OA\Response(response: 401, description: 'Não autenticado'),
             new OA\Response(response: 403, description: 'Sem permissão administrativa'),
             new OA\Response(response: 422, description: 'Erro de validação'),
@@ -212,19 +224,26 @@ class GroupAuthController extends Controller
                 'success' => true,
                 'data' => [
                     'authorized' => false,
+                    'unit_uid' => $schoolUid,
                     'school_uid' => $schoolUid,
+                    'name' => SchoolGroup::where('school_uid', $schoolUid)->value('school_name'),
                     'school_name' => SchoolGroup::where('school_uid', $schoolUid)->value('school_name'),
                     'member' => null,
                 ],
             ]);
         }
 
+        $unitType = $member->group?->unit_type ?? 'school';
+
         return response()->json([
             'success' => true,
             'data' => [
                 'authorized' => true,
+                'unit_uid' => $member->school_uid,
                 'school_uid' => $member->school_uid,
+                'name' => $member->group?->school_name,
                 'school_name' => $member->group?->school_name,
+                'unit_type' => $unitType,
                 'member' => [
                     'id' => $member->id,
                     'name' => $member->name,

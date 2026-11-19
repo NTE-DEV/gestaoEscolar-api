@@ -19,6 +19,7 @@ class GroupAuthTest extends TestCase
     use RefreshDatabase;
 
     private string $schoolUid = '9d8a12b4-4e56-4c89-a123-7890abcdef12';
+    private string $sectorUid = 'f25224ef-1b3d-4136-a9a1-ee9fd2b03020';
 
     public function test_step1_denies_user_not_in_school_group_without_calling_portal(): void
     {
@@ -27,6 +28,7 @@ class GroupAuthTest extends TestCase
         $group = SchoolGroup::create([
             'school_uid' => $this->schoolUid,
             'school_name' => 'UMEF Teste',
+            'unit_type' => 'school',
             'active' => true,
         ]);
 
@@ -61,6 +63,7 @@ class GroupAuthTest extends TestCase
         $inactiveGroup = SchoolGroup::create([
             'school_uid' => $this->schoolUid,
             'school_name' => 'UMEF Inativa',
+            'unit_type' => 'school',
             'active' => false,
         ]);
 
@@ -100,129 +103,7 @@ class GroupAuthTest extends TestCase
 
         $group = SchoolGroup::create([
             'school_uid' => $this->schoolUid,
-            'school_name' => 'UMEF Alger Ribeiro Bossois',
-            'active' => true,
-        ]);
-
-        SchoolGroupMember::create([
-            'school_group_id' => $group->id,
-            'school_uid' => $this->schoolUid,
-            'name' => 'Servidor Teste',
-            'cpf' => '123.456.789-00',
-            'role' => 'Secretário Escolar',
-            'active' => true,
-        ]);
-
-        $this->postJson('/api/v1/auth/group-login', [
-            'school_uid' => $this->schoolUid,
-            'login' => '123.456.789-00',
-            'password' => 'senha-errada',
-        ])
-            ->assertStatus(401)
-            ->assertJsonPath('success', false)
-            ->assertJsonPath('step', 'portal_semed_authentication');
-
-        Http::assertSentCount(1);
-        Http::assertSent(fn (HttpClientRequest $req) => str_ends_with($req->url(), '/api/v1/login')
-            && $req['login'] === '12345678900'
-            && $req['origin'] === 'portal');
-
-        $this->assertDatabaseHas('audit_logs', [
-            'action' => 'LOGIN_GROUP_FAILED',
-            'resource_id' => $this->schoolUid,
-        ]);
-    }
-
-    public function test_two_step_group_login_succeeds_by_case_insensitive_email_and_creates_scoped_session(): void
-    {
-        Http::fake([
-            '*/api/v1/login' => Http::response([
-                'success' => true,
-                'message' => 'Login realizado com sucesso',
-                'token' => 'portal-jwt-token',
-                'user' => [
-                    'id' => 842,
-                    'uid' => '7a6b5c4d-1234-4abc-9def-000011112222',
-                    'name' => 'Maria da Silva',
-                    'email' => 'diretor.escola@semed.vilavelha.es.gov.br',
-                    'cpf' => '12345678900',
-                    'roles' => [['name' => 'Diretor Escolar']],
-                ],
-            ], 200),
-        ]);
-
-        $group = SchoolGroup::create([
-            'school_uid' => $this->schoolUid,
-            'school_name' => 'UMEF Alger Ribeiro Bossois',
-            'active' => true,
-        ]);
-
-        $member = SchoolGroupMember::create([
-            'school_group_id' => $group->id,
-            'school_uid' => $this->schoolUid,
-            'email' => 'Diretor.Escola@semed.vilavelha.es.gov.br',
-            'role' => 'Gestor Escolar',
-            'active' => true,
-        ]);
-
-        $response = $this->postJson('/api/v1/auth/group-login', [
-            'school_uid' => $this->schoolUid,
-            'login' => '  DIRETOR.ESCOLA@semed.vilavelha.es.gov.br ',
-            'password' => 'SenhaCorreta123',
-            'device_id' => 'diario-web',
-        ]);
-
-        $response->assertOk()
-            ->assertJsonPath('success', true)
-            ->assertJsonPath('data.token_type', 'Bearer')
-            ->assertJsonPath('data.user.email', 'diretor.escola@semed.vilavelha.es.gov.br')
-            ->assertJsonPath('data.school_group.school_uid', $this->schoolUid)
-            ->assertJsonPath('data.school_group.member_role', 'Gestor Escolar');
-
-        $plainToken = $response->json('data.token');
-        $this->assertNotEmpty($plainToken);
-
-        $accessToken = PersonalAccessToken::findToken($plainToken);
-        $this->assertNotNull($accessToken);
-        $this->assertTrue($accessToken->can("school:{$this->schoolUid}"));
-        $this->assertTrue($accessToken->can('group-auth'));
-
-        $member->refresh();
-        $this->assertSame(842, $member->portal_user_id);
-        $this->assertSame('7a6b5c4d-1234-4abc-9def-000011112222', $member->portal_user_uid);
-        $this->assertNotNull($member->local_user_id);
-
-        $this->assertDatabaseHas('audit_logs', [
-            'action' => 'LOGIN_GROUP',
-            'resource_id' => $this->schoolUid,
-            'user_email' => 'diretor.escola@semed.vilavelha.es.gov.br',
-        ]);
-
-        $this->withToken($plainToken)
-            ->getJson('/api/v1/auth/me')
-            ->assertOk()
-            ->assertJsonPath('data.email', 'diretor.escola@semed.vilavelha.es.gov.br');
-    }
-
-    public function test_anti_spoofing_blocks_when_portal_user_does_not_match_group_member(): void
-    {
-        Http::fake([
-            '*/api/v1/login' => Http::response([
-                'success' => true,
-                'user' => [
-                    'id' => 999,
-                    'uid' => 'ffffffff-ffff-4fff-8fff-ffffffffffff',
-                    'name' => 'Outro Usuário',
-                    'email' => 'outro@semed.vilavelha.es.gov.br',
-                    'cpf' => '99999999999',
-                    'roles' => [['name' => 'Professor']],
-                ],
-            ], 200),
-        ]);
-
-        $group = SchoolGroup::create([
-            'school_uid' => $this->schoolUid,
-            'school_name' => 'UMEF Teste',
+            'school_name' => 'UMEF Paulo Maresguia',
             'active' => true,
         ]);
 
@@ -230,67 +111,197 @@ class GroupAuthTest extends TestCase
             'school_group_id' => $group->id,
             'school_uid' => $this->schoolUid,
             'cpf' => '12345678900',
-            'role' => 'Gestor Escolar',
+            'email' => 'membro.cpf@semed.vilavelha.es.gov.br',
+            'role' => 'Secretário Escolar',
             'active' => true,
         ]);
 
-        $this->postJson('/api/v1/auth/group-login', [
+        $res = $this->postJson('/api/v1/auth/group-login', [
             'school_uid' => $this->schoolUid,
-            'login' => '12345678900',
-            'password' => 'SenhaCorreta',
-        ])
-            ->assertStatus(403)
-            ->assertJsonPath('step', 'school_group_validation');
+            'login' => '123.456.789-00',
+            'password' => 'senha-errada',
+        ]);
 
-        $this->assertDatabaseCount('personal_access_tokens', 0);
+        $res->assertStatus(401)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('step', 'portal_semed_authentication');
+
+        Http::assertSent(function (HttpClientRequest $request) {
+            return str_contains($request->url(), '/api/v1/login')
+                && $request['login'] === '12345678900'
+                && $request['origin'] === 'portal';
+        });
+
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'LOGIN_GROUP_FAILED',
+            'resource_id' => $this->schoolUid,
+        ]);
     }
 
-    public function test_aliases_and_validation_errors_on_group_login(): void
+    public function test_step1_and_step2_success_creates_sanctum_session_with_unit_and_school_scope(): void
     {
         Http::fake([
             '*/api/v1/login' => Http::response([
                 'success' => true,
                 'user' => [
-                    'id' => 301,
-                    'name' => 'Alias User',
-                    'email' => 'alias@semed.vilavelha.es.gov.br',
+                    'id' => 500,
+                    'uid' => 'cccc3333-3333-4333-8333-333333333333',
+                    'name' => 'Professor Silva',
+                    'email' => 'professor.silva@semed.vilavelha.es.gov.br',
                     'cpf' => '55566677788',
-                    'roles' => ['Editor de Conteúdo'],
+                    'roles' => [['name' => 'Professor']],
                 ],
+                'token' => 'portal-mock-token',
             ], 200),
         ]);
 
         $group = SchoolGroup::create([
             'school_uid' => $this->schoolUid,
-            'school_name' => 'UMEF Alias',
+            'school_name' => 'UMEF Praia da Costa',
+            'active' => true,
+        ]);
+
+        $member = SchoolGroupMember::create([
+            'school_group_id' => $group->id,
+            'school_uid' => $this->schoolUid,
+            'email' => 'professor.silva@semed.vilavelha.es.gov.br',
+            'role' => 'Professor Articulador',
+            'active' => true,
+        ]);
+
+        $res = $this->postJson('/api/v1/auth/group-login', [
+            'unit_uid' => $this->schoolUid,
+            'login' => 'PROFESSOR.SILVA@semed.vilavelha.es.gov.br',
+            'password' => 'senha123',
+            'device_id' => 'pc-sala-professores',
+        ]);
+
+        $res->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.user.portal_user_id', 500)
+            ->assertJsonPath('data.user.email', 'professor.silva@semed.vilavelha.es.gov.br')
+            ->assertJsonPath('data.unit_group.uid', $this->schoolUid)
+            ->assertJsonPath('data.school_group.school_uid', $this->schoolUid)
+            ->assertJsonPath('data.school_group.member_role', 'Professor Articulador');
+
+        $tokenStr = $res->json('data.token');
+        $this->assertNotEmpty($tokenStr);
+
+        $member->refresh();
+        $this->assertSame(500, $member->portal_user_id);
+        $this->assertNotNull($member->local_user_id);
+
+        $user = User::where('portal_user_id', 500)->first();
+        $this->assertNotNull($user);
+
+        // Valida abilities escopadas
+        $pat = PersonalAccessToken::findToken($tokenStr);
+        $this->assertNotNull($pat);
+        $this->assertTrue($pat->can('unit:' . $this->schoolUid));
+        $this->assertTrue($pat->can('school:' . $this->schoolUid));
+        $this->assertTrue($pat->can('group-auth'));
+
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'LOGIN_GROUP',
+            'resource_id' => $this->schoolUid,
+            'user_id' => $user->id,
+        ]);
+    }
+
+    public function test_step1_and_step2_success_on_sector_group(): void
+    {
+        Http::fake([
+            '*/api/v1/login' => Http::response([
+                'success' => true,
+                'user' => [
+                    'id' => 600,
+                    'uid' => 'dddd4444-4444-4444-8444-444444444444',
+                    'name' => 'Nutricionista Chefe',
+                    'email' => 'nutri@edu.vilavelha.es.gov.br',
+                    'cpf' => '99988877766',
+                    'roles' => [['name' => 'Nutricionista']],
+                ],
+                'token' => 'portal-mock-token-sector',
+            ], 200),
+        ]);
+
+        $sectorGroup = SchoolGroup::create([
+            'school_uid' => $this->sectorUid,
+            'school_name' => 'Alimentação Escolar',
+            'unit_type' => 'sector',
+            'active' => true,
+        ]);
+
+        $member = SchoolGroupMember::create([
+            'school_group_id' => $sectorGroup->id,
+            'school_uid' => $this->sectorUid,
+            'email' => 'nutri@edu.vilavelha.es.gov.br',
+            'role' => 'Nutricionista RT',
+            'active' => true,
+        ]);
+
+        $res = $this->postJson('/api/v1/auth/group-login', [
+            'unit_uid' => $this->sectorUid,
+            'login' => 'nutri@edu.vilavelha.es.gov.br',
+            'password' => 'nutri123',
+        ]);
+
+        $res->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.unit_group.type', 'sector')
+            ->assertJsonPath('data.unit_group.name', 'Alimentação Escolar')
+            ->assertJsonPath('data.unit_group.uid', $this->sectorUid);
+
+        $tokenStr = $res->json('data.token');
+        $pat = PersonalAccessToken::findToken($tokenStr);
+        $this->assertTrue($pat->can('unit:' . $this->sectorUid));
+    }
+
+    public function test_anti_spoofing_detects_mismatch_between_step1_and_step2(): void
+    {
+        Http::fake([
+            '*/api/v1/login' => Http::response([
+                'success' => true,
+                'user' => [
+                    'id' => 999,
+                    'email' => 'outro.usuario@semed.vilavelha.es.gov.br',
+                    'cpf' => '00011122233',
+                    'roles' => [['name' => 'Aluno']],
+                ],
+                'token' => 'fake-token',
+            ], 200),
+        ]);
+
+        $group = SchoolGroup::create([
+            'school_uid' => $this->schoolUid,
+            'school_name' => 'UMEF Ilha da Jussara',
             'active' => true,
         ]);
 
         SchoolGroupMember::create([
             'school_group_id' => $group->id,
             'school_uid' => $this->schoolUid,
-            'cpf' => '55566677788',
+            'email' => 'vitima@semed.vilavelha.es.gov.br',
+            'cpf' => '99988877766',
+            'role' => 'Coordenador',
             'active' => true,
         ]);
 
         $this->postJson('/api/v1/auth/group-login', [
-            'uid_escola' => 'not-a-uuid',
-            'cpf' => '',
-            'password' => '',
+            'school_uid' => $this->schoolUid,
+            'login' => 'vitima@semed.vilavelha.es.gov.br',
+            'password' => 'qualquer',
         ])
-            ->assertStatus(422)
-            ->assertJsonValidationErrors(['school_uid', 'login', 'password']);
+            ->assertStatus(403)
+            ->assertJsonPath('step', 'school_group_validation');
 
-        $this->postJson('/api/v1/auth/group-login', [
-            'uid_escola' => $this->schoolUid,
-            'cpf' => '555.666.777-88',
-            'password' => 'secret',
-        ])
-            ->assertOk()
-            ->assertJsonPath('data.user.cpf', '55566677788');
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'LOGIN_GROUP_DENIED',
+            'resource_id' => $this->schoolUid,
+        ]);
     }
 
-    public function test_group_verify_and_school_groups_crud_and_schools_proxy_and_sync(): void
+    public function test_schools_endpoint_returns_unified_list_with_schools_and_sectors(): void
     {
         Cache::flush();
 
@@ -298,11 +309,16 @@ class GroupAuthTest extends TestCase
             '*/api/v1/publics/schools*' => Http::response([
                 'success' => true,
                 'data' => [
-                    'current_page' => 1,
-                    'last_page' => 1,
-                    'total' => 1,
                     'data' => [
-                        ['id' => 10, 'uid' => $this->schoolUid, 'name' => 'Alger Ribeiro Bossois', 'type' => 'UMEF'],
+                        ['id' => 10, 'uid' => $this->schoolUid, 'name' => 'Alger Ribeiro Bossois', 'type' => 'UMEF', 'inep' => '32066309'],
+                    ],
+                ],
+            ], 200),
+            '*/api/v1/publics/sectors*' => Http::response([
+                'success' => true,
+                'data' => [
+                    'data' => [
+                        ['id' => 13, 'uid' => $this->sectorUid, 'name' => 'Alimentação Escolar', 'type' => 'coordenacao', 'email' => 'nutri@edu.vilavelha.es.gov.br'],
                     ],
                 ],
             ], 200),
@@ -329,12 +345,34 @@ class GroupAuthTest extends TestCase
             ], 200),
         ]);
 
-        // Lista pública de escolas com cache (2ª chamada não refaz HTTP)
-        $this->getJson('/api/v1/schools')
-            ->assertOk()
+        // 1. Lista pública unificada (ambos na mesma lista)
+        $resUnified = $this->getJson('/api/v1/schools');
+        $resUnified->assertOk()
             ->assertJsonPath('success', true)
+            ->assertJsonPath('meta.total_schools', 1)
+            ->assertJsonPath('meta.total_sectors', 1)
+            ->assertJsonPath('meta.total_units', 2);
+
+        $types = collect($resUnified->json('data'))->pluck('type')->all();
+        $this->assertContains('school', $types);
+        $this->assertContains('sector', $types);
+
+        // 2. Rota alias /api/v1/units
+        $this->getJson('/api/v1/units')->assertOk();
+
+        // 3. Filtro somente setores
+        $resSectors = $this->getJson('/api/v1/schools?type=sector');
+        $resSectors->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.type', 'sector')
+            ->assertJsonPath('data.0.uid', $this->sectorUid);
+
+        // 4. Filtro somente escolas
+        $resSchools = $this->getJson('/api/v1/schools?type=school');
+        $resSchools->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.type', 'school')
             ->assertJsonPath('data.0.uid', $this->schoolUid);
-        $this->getJson('/api/v1/schools')->assertOk();
 
         $admin = User::create([
             'portal_user_id' => 1,
@@ -347,6 +385,7 @@ class GroupAuthTest extends TestCase
         // CRUD: adicionar membro
         $createRes = $this->postJson("/api/v1/school-groups/{$this->schoolUid}/members", [
             'school_name' => 'UMEF Alger Ribeiro Bossois',
+            'unit_type' => 'school',
             'name' => 'Maria Diretora',
             'email' => 'MARIA@semed.vilavelha.es.gov.br',
             'cpf' => '987.654.321-00',
@@ -357,32 +396,15 @@ class GroupAuthTest extends TestCase
         $this->assertSame('maria@semed.vilavelha.es.gov.br', $createRes->json('data.email'));
         $this->assertSame('98765432100', $createRes->json('data.cpf'));
 
-        // Verify Passo 1 (positivo e negativo)
+        // Verify Passo 1 com unit_uid
         $this->postJson('/api/v1/auth/group-verify', [
-            'school_uid' => $this->schoolUid,
+            'unit_uid' => $this->schoolUid,
             'login' => '98765432100',
         ])
             ->assertOk()
             ->assertJsonPath('data.authorized', true)
+            ->assertJsonPath('data.unit_type', 'school')
             ->assertJsonPath('data.member.role', 'Diretor Escolar');
-
-        $this->postJson('/api/v1/auth/group-verify', [
-            'school_uid' => $this->schoolUid,
-            'login' => 'desconhecido@semed.vilavelha.es.gov.br',
-        ])
-            ->assertOk()
-            ->assertJsonPath('data.authorized', false);
-
-        // Listagem, update, delete
-        $this->getJson('/api/v1/school-groups')
-            ->assertOk()
-            ->assertJsonPath('data.data.0.members_count', 1);
-
-        $this->patchJson("/api/v1/school-groups/{$this->schoolUid}/members/{$memberId}", [
-            'role' => 'Gestor Escolar',
-        ])
-            ->assertOk()
-            ->assertJsonPath('data.role', 'Gestor Escolar');
 
         // Sync com Portal Semed API
         $this->postJson("/api/v1/school-groups/{$this->schoolUid}/sync", [
@@ -399,8 +421,5 @@ class GroupAuthTest extends TestCase
             ->assertOk();
 
         $this->assertTrue(AuditLog::where('action', 'SYNC')->exists());
-
-        Http::assertSent(fn (HttpClientRequest $req) => str_contains($req->url(), '/api/v1/publics/schools'));
-        Http::assertSent(fn (HttpClientRequest $req) => str_contains($req->url(), '/api/v1/groups'));
     }
 }

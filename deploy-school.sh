@@ -198,7 +198,9 @@ if [[ "$SKIP_GIT" == false ]]; then
         echo "🔄 Atualizando código fonte na branch $TARGET_BRANCH..."
         git fetch origin "$TARGET_BRANCH"
         git checkout "$TARGET_BRANCH"
+        git checkout -- deploy-school.sh 2>/dev/null || true
         git pull --ff-only origin "$TARGET_BRANCH"
+        chmod +x deploy-school.sh 2>/dev/null || true
     else
         echo "⚠️ Repositório Git não detectado ou git indisponível. Pulando atualização Git."
     fi

@@ -15,7 +15,7 @@ class SchoolGroupAuthService
     ) {}
 
     /**
-     * Passo 1: Normaliza login (e-mail ou CPF) e verifica vínculo ativo no grupo da escola.
+     * Passo 1: Normaliza login (e-mail ou CPF) e verifica vínculo ativo no grupo da escola ou setor.
      */
     public function verifyGroupMembership(string $schoolUid, string $rawLogin): ?SchoolGroupMember
     {
@@ -93,7 +93,7 @@ class SchoolGroupAuthService
     }
 
     /**
-     * Cria ou atualiza o usuário local e emite token Sanctum escopado ao grupo escolar.
+     * Cria ou atualiza o usuário local e emite token Sanctum escopado à unidade (escola ou setor).
      */
     public function createSessionForMember(
         SchoolGroupMember $member,
@@ -110,7 +110,7 @@ class SchoolGroupAuthService
             $portalUserId ? ['portal_user_id' => $portalUserId] : ['email' => $email],
             [
                 'portal_user_id' => $portalUserId,
-                'name' => $portalUser['name'] ?? $member->name ?? 'Usuário Escolar SEMED',
+                'name' => $portalUser['name'] ?? $member->name ?? 'Usuário SEMED',
                 'email' => $email,
                 'cpf' => $cpf,
                 'roles' => $roles,
@@ -131,32 +131,41 @@ class SchoolGroupAuthService
         }
         $member->fill($updates)->save();
 
-        $abilities = ['school:' . $member->school_uid, 'group-auth'];
-        $tokenName = 'school-group:' . $member->school_uid . ($deviceId ? ':' . $deviceId : '');
+        $unitType = $member->group?->unit_type ?? 'school';
+        $abilities = [
+            'unit:' . $member->school_uid,
+            'school:' . $member->school_uid,
+            'group-auth',
+        ];
+        $tokenName = 'group:' . $member->school_uid . ($deviceId ? ':' . $deviceId : '');
         $token = $user->createToken($tokenName, $abilities)->plainTextToken;
 
         return [
             'token' => $token,
             'abilities' => $abilities,
             'user' => $user,
+            'unit_type' => $unitType,
         ];
     }
 
     /**
-     * Sincroniza os membros vinculados ao UID da escola a partir do Portal Semed.
+     * Sincroniza os membros vinculados ao UID da unidade (escola ou setor) a partir do Portal Semed.
      */
     public function syncSchoolGroupFromPortal(
         string $schoolUid,
         ?string $schoolName = null,
-        ?string $bearerToken = null
+        ?string $bearerToken = null,
+        ?string $unitType = 'school'
     ): array {
-        $portalResult = $this->portalAuth->fetchSchoolGroupMembersFromPortal($schoolUid, $bearerToken);
+        $type = in_array(strtolower((string) $unitType), ['school', 'sector'], true) ? strtolower((string) $unitType) : 'school';
+        $portalResult = $this->portalAuth->fetchSchoolGroupMembersFromPortal($schoolUid, $bearerToken, $type);
 
         if (! ($portalResult['ok'] ?? false)) {
             return $portalResult;
         }
 
         $groupAttributes = [
+            'unit_type' => $type,
             'active' => true,
             'last_synced_at' => now(),
         ];
@@ -186,7 +195,7 @@ class SchoolGroupAuthService
             }
 
             $roleNames = $this->portalAuth->extractRoleNames($userPayload['roles'] ?? []);
-            $memberRole = $roleNames[0] ?? ($entry['role'] ?? 'Membro Escolar');
+            $memberRole = $roleNames[0] ?? ($entry['role'] ?? ($type === 'sector' ? 'Membro Setorial' : 'Membro Escolar'));
 
             $existing = SchoolGroupMember::query()
                 ->where('school_group_id', $group->id)

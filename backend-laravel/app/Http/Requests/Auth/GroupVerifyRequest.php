@@ -13,23 +13,34 @@ class GroupVerifyRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        $schoolUid = $this->filled('school_uid')
-            ? $this->input('school_uid')
-            : $this->input('uid_escola');
+        $unitUid = $this->filled('unit_uid')
+            ? $this->input('unit_uid')
+            : ($this->filled('school_uid')
+                ? $this->input('school_uid')
+                : ($this->filled('sector_uid')
+                    ? $this->input('sector_uid')
+                    : ($this->filled('uid_escola')
+                        ? $this->input('uid_escola')
+                        : $this->input('uid_setor'))));
 
         $login = $this->filled('login')
             ? $this->input('login')
             : ($this->filled('email') ? $this->input('email') : $this->input('cpf'));
 
+        $cleanUid = is_string($unitUid) ? trim($unitUid) : $unitUid;
+        $cleanLogin = is_string($login) ? trim($login) : $login;
+
         $this->merge([
-            'school_uid' => is_string($schoolUid) ? trim($schoolUid) : $schoolUid,
-            'login' => is_string($login) ? trim($login) : $login,
+            'unit_uid' => $cleanUid,
+            'school_uid' => $cleanUid,
+            'login' => $cleanLogin,
         ]);
     }
 
     public function rules(): array
     {
         return [
+            'unit_uid' => ['nullable', 'uuid'],
             'school_uid' => ['required', 'uuid'],
             'login' => ['required', 'string', 'max:150'],
         ];

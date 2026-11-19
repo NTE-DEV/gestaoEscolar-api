@@ -58,7 +58,7 @@ class PortalSemedAuthService
 
     /**
      * Autentica credenciais no Portal Semed sem exigir role administrativa global
-     * (a autorização por unidade escolar é validada no Passo 1 do SchoolGroupAuthService).
+     * (a autorização por unidade escolar/setorial é validada no Passo 1 do SchoolGroupAuthService).
      */
     public function authenticateForSchoolGroup(string $login, string $password, ?string $deviceId = null): array
     {
@@ -85,75 +85,197 @@ class PortalSemedAuthService
     }
 
     /**
-     * Consulta a listagem pública de escolas diretamente na API do Portal Semed (com cache de 5 minutos).
+     * Consulta a listagem pública de escolas e/ou setores diretamente na API do Portal Semed (com cache de 5 minutos).
      */
-    public function fetchPublicSchools(?string $search = null, int $page = 1, int $perPage = 150): array
+    public function fetchPublicSchools(?string $search = null, int $page = 1, int $perPage = 150, ?string $type = 'all'): array
+    {
+        return $this->fetchPublicUnits($search, $type ?: 'all', $page, $perPage);
+    }
+
+    /**
+     * Consulta a listagem unificada de unidades (Escolas e/ou Setores) com normalização de campos.
+     */
+    public function fetchPublicUnits(?string $search = null, string $type = 'all', int $page = 1, int $perPage = 150): array
     {
         $searchTerm = trim((string) $search);
+        $type = in_array(strtolower(trim($type)), ['school', 'sector', 'all'], true) ? strtolower(trim($type)) : 'all';
         $page = max(1, $page);
-        $perPage = min(max(1, $perPage), 200);
-        $cacheKey = sprintf('portal_semed:schools:%s:%d:%d', md5($searchTerm), $page, $perPage);
+        $perPage = min(max(1, $perPage), 250);
+
+        $cacheKey = sprintf('portal_semed:units:%s:%s:%d:%d', md5($searchTerm), $type, $page, $perPage);
 
         if ($cached = Cache::get($cacheKey)) {
             return $cached;
         }
 
-        $baseUrl = rtrim((string) config('services.portal_semed.base_url'), '/');
-        $timeout = (int) config('services.portal_semed.timeout', 15);
+        $allUnits = [];
+        $totalSchools = 0;
+        $totalSectors = 0;
 
-        $url = $searchTerm !== ''
-            ? "{$baseUrl}/api/v1/publics/schools/search"
-            : "{$baseUrl}/api/v1/publics/schools";
-
-        $query = $searchTerm !== ''
-            ? ['query' => $searchTerm, 'page' => $page, 'per_page' => $perPage]
-            : ['page' => $page, 'per_page' => $perPage];
-
-        try {
-            $response = Http::timeout($timeout)
-                ->acceptJson()
-                ->get($url, $query);
-
-            if (! $response->successful()) {
-                return [
-                    'ok' => false,
-                    'status' => $response->status() ?: 502,
-                    'message' => 'Falha ao consultar lista de escolas no Portal Semed.',
-                    'data' => [],
-                ];
+        // 1. Carrega Escolas se type for 'all' ou 'school'
+        if ($type === 'all' || $type === 'school') {
+            $schoolsRaw = $this->fetchRawSchools();
+            $totalSchools = count($schoolsRaw);
+            foreach ($schoolsRaw as $s) {
+                $allUnits[] = $this->normalizeSchoolItem($s);
             }
-
-            $json = $response->json() ?? [];
-            [$items, $meta] = $this->unwrapPaginatedPayload($json);
-
-            $result = [
-                'ok' => true,
-                'status' => 200,
-                'data' => $items,
-                'meta' => $meta,
-            ];
-
-            Cache::put($cacheKey, $result, now()->addMinutes(5));
-
-            return $result;
-        } catch (\Throwable $e) {
-            Log::error('PortalSemedAuthService: erro ao buscar escolas no Portal Semed', [
-                'error' => $e->getMessage(),
-            ]);
-
-            return [
-                'ok' => false,
-                'status' => 503,
-                'message' => 'Não foi possível comunicar com a API de escolas do Portal Semed.',
-                'data' => [],
-            ];
         }
+
+        // 2. Carrega Setores se type for 'all' ou 'sector'
+        if ($type === 'all' || $type === 'sector') {
+            $sectorsRaw = $this->fetchRawSectors();
+            $totalSectors = count($sectorsRaw);
+            foreach ($sectorsRaw as $sec) {
+                $allUnits[] = $this->normalizeSectorItem($sec);
+            }
+        }
+
+        // 3. Aplica filtro de busca textual se houver
+        if ($searchTerm !== '') {
+            $termLower = mb_strtolower($searchTerm, 'UTF-8');
+            $allUnits = array_values(array_filter($allUnits, function ($item) use ($termLower) {
+                $name = mb_strtolower((string) ($item['name'] ?? ''), 'UTF-8');
+                $code = mb_strtolower((string) ($item['code'] ?? ''), 'UTF-8');
+                $email = mb_strtolower((string) ($item['email'] ?? ''), 'UTF-8');
+
+                return str_contains($name, $termLower)
+                    || str_contains($code, $termLower)
+                    || str_contains($email, $termLower);
+            }));
+        }
+
+        // Ordenação por nome
+        usort($allUnits, fn ($a, $b) => strcasecmp((string) $a['name'], (string) $b['name']));
+
+        // Paginação manual em memória
+        $totalItems = count($allUnits);
+        $offset = ($page - 1) * $perPage;
+        $paginatedItems = array_slice($allUnits, $offset, $perPage);
+        $lastPage = (int) ceil(max(1, $totalItems) / $perPage);
+
+        $result = [
+            'ok' => true,
+            'status' => 200,
+            'data' => $paginatedItems,
+            'meta' => [
+                'current_page' => $page,
+                'last_page' => $lastPage,
+                'per_page' => $perPage,
+                'total' => $totalItems,
+                'total_schools' => $totalSchools,
+                'total_sectors' => $totalSectors,
+                'total_units' => $totalSchools + $totalSectors,
+                'type_filter' => $type,
+            ],
+        ];
+
+        Cache::put($cacheKey, $result, now()->addMinutes(5));
+
+        return $result;
     }
 
     /**
-     * Consulta os membros do grupo vinculado ao UID da escola no Portal Semed.
+     * Busca lista crua de escolas com cache interno de 10 minutos.
      */
-    public function fetchSchoolGroupMembersFromPortal(string $schoolUid, ?string $bearerToken = null): array
+    public function fetchRawSchools(): array
+    {
+        return Cache::remember('portal_semed:raw_schools', now()->addMinutes(10), function () {
+            $baseUrl = rtrim((string) config('services.portal_semed.base_url'), '/');
+            $timeout = (int) config('services.portal_semed.timeout', 15);
+
+            try {
+                $response = Http::timeout($timeout)
+                    ->acceptJson()
+                    ->get("{$baseUrl}/api/v1/publics/schools", ['per_page' => 250]);
+
+                if (! $response->successful()) {
+                    return [];
+                }
+
+                [$items] = $this->unwrapPaginatedPayload($response->json() ?? []);
+                return $items;
+            } catch (\Throwable $e) {
+                Log::error('PortalSemedAuthService: erro ao buscar escolas cruas', ['error' => $e->getMessage()]);
+                return [];
+            }
+        });
+    }
+
+    /**
+     * Busca lista crua de setores com cache interno de 10 minutos.
+     */
+    public function fetchRawSectors(): array
+    {
+        return Cache::remember('portal_semed:raw_sectors', now()->addMinutes(10), function () {
+            $baseUrl = rtrim((string) config('services.portal_semed.base_url'), '/');
+            $timeout = (int) config('services.portal_semed.timeout', 15);
+
+            try {
+                $response = Http::timeout($timeout)
+                    ->acceptJson()
+                    ->get("{$baseUrl}/api/v1/publics/sectors", ['per_page' => 250]);
+
+                if (! $response->successful()) {
+                    return [];
+                }
+
+                [$items] = $this->unwrapPaginatedPayload($response->json() ?? []);
+                return $items;
+            } catch (\Throwable $e) {
+                Log::error('PortalSemedAuthService: erro ao buscar setores crus', ['error' => $e->getMessage()]);
+                return [];
+            }
+        });
+    }
+
+    /**
+     * Normaliza item de escola para padrão unificado de unidade.
+     */
+    private function normalizeSchoolItem(array $s): array
+    {
+        $schoolType = trim((string) ($s['type'] ?? 'UMEF'));
+        $label = $schoolType !== '' ? "Escola ({$schoolType})" : 'Escola';
+
+        return [
+            'id' => $s['id'] ?? null,
+            'uid' => (string) ($s['uid'] ?? ''),
+            'name' => (string) ($s['name'] ?? ''),
+            'type' => 'school',
+            'type_label' => $label,
+            'code' => $s['inep'] ?? null,
+            'email' => $s['email_primary'] ?? $s['email_alternative'] ?? $s['email'] ?? null,
+            'phone' => $s['phone'] ?? $s['cellphone'] ?? null,
+            'active' => ! ($s['trash'] ?? false),
+            'raw_type' => $schoolType,
+        ];
+    }
+
+    /**
+     * Normaliza item de setor para padrão unificado de unidade.
+     */
+    private function normalizeSectorItem(array $sec): array
+    {
+        $sectorType = trim((string) ($sec['type'] ?? 'setor'));
+        $label = $sectorType !== '' ? 'Setor (' . ucfirst($sectorType) . ')' : 'Setor';
+
+        return [
+            'id' => $sec['id'] ?? null,
+            'uid' => (string) ($sec['uid'] ?? ''),
+            'name' => (string) ($sec['name'] ?? ''),
+            'type' => 'sector',
+            'type_label' => $label,
+            'code' => null,
+            'email' => $sec['email'] ?? null,
+            'phone' => $sec['phone'] ?? $sec['mobile'] ?? null,
+            'active' => (bool) ($sec['active'] ?? true),
+            'raw_type' => $sectorType,
+        ];
+    }
+
+    /**
+     * Consulta os membros do grupo vinculado ao UID da unidade (escola ou setor) no Portal Semed.
+     */
+    public function fetchSchoolGroupMembersFromPortal(string $schoolUid, ?string $bearerToken = null, string $type = 'school'): array
     {
         $token = trim((string) ($bearerToken ?: config('services.portal_semed.api_token')));
         if ($token === '') {
@@ -167,6 +289,7 @@ class PortalSemedAuthService
 
         $baseUrl = rtrim((string) config('services.portal_semed.base_url'), '/');
         $timeout = (int) config('services.portal_semed.timeout', 15);
+        $groupType = in_array(strtolower($type), ['school', 'sector'], true) ? strtolower($type) : 'school';
 
         try {
             $response = Http::timeout($timeout)
@@ -174,7 +297,7 @@ class PortalSemedAuthService
                 ->acceptJson()
                 ->get("{$baseUrl}/api/v1/groups", [
                     'uid_from_who' => $schoolUid,
-                    'type' => 'school',
+                    'type' => $groupType,
                     'active' => 1,
                     'per_page' => 200,
                 ]);
@@ -183,7 +306,7 @@ class PortalSemedAuthService
                 return [
                     'ok' => false,
                     'status' => $response->status() ?: 502,
-                    'message' => $response->json('message') ?? 'Falha ao consultar grupo da escola no Portal Semed.',
+                    'message' => $response->json('message') ?? 'Falha ao consultar grupo no Portal Semed.',
                     'data' => [],
                 ];
             }
@@ -197,8 +320,9 @@ class PortalSemedAuthService
                 'meta' => $meta,
             ];
         } catch (\Throwable $e) {
-            Log::error('PortalSemedAuthService: erro ao sincronizar grupo escolar no Portal Semed', [
+            Log::error('PortalSemedAuthService: erro ao sincronizar grupo no Portal Semed', [
                 'school_uid' => $schoolUid,
+                'type' => $groupType,
                 'error' => $e->getMessage(),
             ]);
 
