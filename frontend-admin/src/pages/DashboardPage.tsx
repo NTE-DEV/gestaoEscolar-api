@@ -13,8 +13,10 @@ import {
 } from 'chart.js'
 import { Doughnut, Line } from 'react-chartjs-2'
 import {
+  BookOpen,
   Box,
   Cpu,
+  ExternalLink,
   Globe,
   HardDrive,
   MemoryStick,
@@ -25,7 +27,7 @@ import {
 } from 'lucide-react'
 import { Layout } from '../components/Layout'
 import { useAuth } from '../contexts/AuthContext'
-import { api } from '../services/api'
+import { api, resolveSwaggerUrl } from '../services/api'
 
 ChartJS.register(
   CategoryScale,
@@ -309,6 +311,17 @@ export const DashboardPage: React.FC = () => {
           <p>Observabilidade do servidor 172.23.55.66 e serviços do ecossistema SEMED.</p>
         </div>
         <div className="header-actions">
+          <a
+            href={resolveSwaggerUrl()}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn-cyan"
+            title="Abrir documentação interativa da API (Swagger / OpenAPI 3.0)"
+          >
+            <BookOpen size={16} />
+            <span>Documentação API</span>
+            <ExternalLink size={13} style={{ opacity: 0.85 }} />
+          </a>
           <button type="button" className="btn btn-primary" onClick={loadAll} disabled={loading}>
             <RefreshCw size={16} />
             <span>{loading ? 'Atualizando...' : 'Atualizar'}</span>

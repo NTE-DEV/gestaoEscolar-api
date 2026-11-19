@@ -17,6 +17,13 @@ export function resolveRouterBasename(): string {
   return '/'
 }
 
+export function resolveSwaggerUrl(): string {
+  if (typeof window !== 'undefined' && window.location.pathname.startsWith('/dev/admin')) {
+    return '/dev/admin/api/documentation'
+  }
+  return '/admin/api/documentation'
+}
+
 export const api = axios.create({
   baseURL: resolveApiBaseUrl(),
   headers: {

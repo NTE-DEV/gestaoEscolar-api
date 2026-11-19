@@ -1,7 +1,8 @@
 import React from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Activity, FileClock, LogOut, Server } from 'lucide-react'
+import { Activity, BookOpen, FileClock, LogOut, Server } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { resolveSwaggerUrl } from '../services/api'
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, logout } = useAuth()
@@ -32,6 +33,16 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               <FileClock size={16} />
               <span>Auditoria de Logs</span>
             </NavLink>
+            <a
+              href={resolveSwaggerUrl()}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="nav-link"
+              title="Abrir documentação interativa Swagger (OpenAPI 3.0)"
+            >
+              <BookOpen size={16} />
+              <span>Documentação API</span>
+            </a>
           </nav>
         </div>
 
