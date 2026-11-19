@@ -219,7 +219,7 @@ export const GroupsPage: React.FC = () => {
     setUnitsLoading(true)
     setUnitsWarning(null)
     try {
-      const res = await api.get('/units', { params: { per_page: 250 } })
+      const res = await api.get('/units', { params: { per_page: 500 } })
       setPortalUnits(res.data?.data || [])
       setUnitsLoaded(true)
     } catch (err) {
@@ -737,8 +737,8 @@ export const GroupsPage: React.FC = () => {
 
       {/* Modal Criar / Editar Grupo */}
       {groupModalOpen && (
-        <div className="modal-backdrop" onClick={() => setGroupModalOpen(false)}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-backdrop">
+          <div className="modal-card">
             <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <Users size={18} />
@@ -773,7 +773,7 @@ export const GroupsPage: React.FC = () => {
                     <option value="">
                       {unitsLoading
                         ? 'Carregando unidades do Portal SEMED...'
-                        : '— Selecione uma escola ou setor (ou preencha manualmente) —'}
+                        : `— Selecione uma escola ou setor (${filteredPortalUnits.length} de ${portalUnits.length} unidade(s)) —`}
                     </option>
                     {filteredPortalUnits.map((u) => (
                       <option key={u.uid} value={u.uid}>

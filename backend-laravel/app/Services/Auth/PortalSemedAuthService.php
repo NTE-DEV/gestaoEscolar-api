@@ -2,6 +2,8 @@
 
 namespace App\Services\Auth;
 
+use Illuminate\Http\Client\Pool;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -87,7 +89,7 @@ class PortalSemedAuthService
     /**
      * Consulta a listagem pública de escolas e/ou setores diretamente na API do Portal Semed (com cache de 5 minutos).
      */
-    public function fetchPublicSchools(?string $search = null, int $page = 1, int $perPage = 150, ?string $type = 'all'): array
+    public function fetchPublicSchools(?string $search = null, int $page = 1, int $perPage = 500, ?string $type = 'all'): array
     {
         return $this->fetchPublicUnits($search, $type ?: 'all', $page, $perPage);
     }
@@ -95,14 +97,14 @@ class PortalSemedAuthService
     /**
      * Consulta a listagem unificada de unidades (Escolas e/ou Setores) com normalização de campos.
      */
-    public function fetchPublicUnits(?string $search = null, string $type = 'all', int $page = 1, int $perPage = 150): array
+    public function fetchPublicUnits(?string $search = null, string $type = 'all', int $page = 1, int $perPage = 500): array
     {
         $searchTerm = trim((string) $search);
         $type = in_array(strtolower(trim($type)), ['school', 'sector', 'all'], true) ? strtolower(trim($type)) : 'all';
         $page = max(1, $page);
-        $perPage = min(max(1, $perPage), 250);
+        $perPage = min(max(1, $perPage), 500);
 
-        $cacheKey = sprintf('portal_semed:units:%s:%s:%d:%d', md5($searchTerm), $type, $page, $perPage);
+        $cacheKey = sprintf('portal_semed:v2:units:%s:%s:%d:%d', md5($searchTerm), $type, $page, $perPage);
 
         if ($cached = Cache::get($cacheKey)) {
             return $cached;
@@ -169,63 +171,109 @@ class PortalSemedAuthService
             ],
         ];
 
-        Cache::put($cacheKey, $result, now()->addMinutes(5));
+        if ($allUnits !== []) {
+            Cache::put($cacheKey, $result, now()->addMinutes(5));
+        }
 
         return $result;
     }
 
     /**
-     * Busca lista crua de escolas com cache interno de 10 minutos.
+     * Busca lista crua completa (todas as páginas) de escolas com cache interno de 10 minutos.
      */
     public function fetchRawSchools(): array
     {
-        return Cache::remember('portal_semed:raw_schools', now()->addMinutes(10), function () {
-            $baseUrl = rtrim((string) config('services.portal_semed.base_url'), '/');
-            $timeout = (int) config('services.portal_semed.timeout', 15);
-
-            try {
-                $response = Http::timeout($timeout)
-                    ->acceptJson()
-                    ->get("{$baseUrl}/api/v1/publics/schools", ['per_page' => 250]);
-
-                if (! $response->successful()) {
-                    return [];
-                }
-
-                [$items] = $this->unwrapPaginatedPayload($response->json() ?? []);
-                return $items;
-            } catch (\Throwable $e) {
-                Log::error('PortalSemedAuthService: erro ao buscar escolas cruas', ['error' => $e->getMessage()]);
-                return [];
-            }
-        });
+        return $this->fetchAllPaginatedPublicEndpoint('portal_semed:v2:raw_schools', '/api/v1/publics/schools', 'escolas');
     }
 
     /**
-     * Busca lista crua de setores com cache interno de 10 minutos.
+     * Busca lista crua completa (todas as páginas) de setores com cache interno de 10 minutos.
      */
     public function fetchRawSectors(): array
     {
-        return Cache::remember('portal_semed:raw_sectors', now()->addMinutes(10), function () {
-            $baseUrl = rtrim((string) config('services.portal_semed.base_url'), '/');
-            $timeout = (int) config('services.portal_semed.timeout', 15);
+        return $this->fetchAllPaginatedPublicEndpoint('portal_semed:v2:raw_sectors', '/api/v1/publics/sectors', 'setores');
+    }
 
-            try {
-                $response = Http::timeout($timeout)
-                    ->acceptJson()
-                    ->get("{$baseUrl}/api/v1/publics/sectors", ['per_page' => 250]);
+    /**
+     * Busca todas as páginas de um endpoint público paginado do Portal Semed (em paralelo via Http::pool) e deduplica.
+     */
+    private function fetchAllPaginatedPublicEndpoint(string $cacheKey, string $path, string $logLabel, int $maxPages = 30): array
+    {
+        $cached = Cache::get($cacheKey);
+        if (is_array($cached) && $cached !== []) {
+            return $cached;
+        }
 
-                if (! $response->successful()) {
-                    return [];
-                }
+        $baseUrl = rtrim((string) config('services.portal_semed.base_url'), '/');
+        $timeout = (int) config('services.portal_semed.timeout', 15);
 
-                [$items] = $this->unwrapPaginatedPayload($response->json() ?? []);
-                return $items;
-            } catch (\Throwable $e) {
-                Log::error('PortalSemedAuthService: erro ao buscar setores crus', ['error' => $e->getMessage()]);
+        try {
+            $firstResponse = Http::timeout($timeout)
+                ->acceptJson()
+                ->get("{$baseUrl}{$path}", ['page' => 1, 'per_page' => 250]);
+
+            if (! $firstResponse->successful()) {
+                Log::warning("PortalSemedAuthService: falha ao buscar página 1 de {$logLabel}", [
+                    'status' => $firstResponse->status(),
+                ]);
                 return [];
             }
-        });
+
+            [$firstItems, $meta] = $this->unwrapPaginatedPayload($firstResponse->json() ?? []);
+            $lastPage = min(max(1, (int) ($meta['last_page'] ?? 1)), $maxPages);
+
+            $rawItems = $firstItems;
+            $allPagesSucceeded = true;
+
+            if ($lastPage > 1) {
+                $poolResponses = Http::pool(function (Pool $pool) use ($baseUrl, $path, $timeout, $lastPage) {
+                    for ($p = 2; $p <= $lastPage; $p++) {
+                        $pool->as((string) $p)
+                            ->timeout($timeout)
+                            ->acceptJson()
+                            ->get("{$baseUrl}{$path}", ['page' => $p, 'per_page' => 250]);
+                    }
+                });
+
+                for ($p = 2; $p <= $lastPage; $p++) {
+                    $res = $poolResponses[(string) $p] ?? null;
+                    if ($res instanceof Response && $res->successful()) {
+                        [$pageItems] = $this->unwrapPaginatedPayload($res->json() ?? []);
+                        array_push($rawItems, ...$pageItems);
+                    } else {
+                        $allPagesSucceeded = false;
+                        Log::warning("PortalSemedAuthService: falha ao buscar página {$p} de {$logLabel}");
+                    }
+                }
+            }
+
+            // Deduplicar por uid (fallback id) preservando a ordem
+            $seen = [];
+            $deduped = [];
+            foreach ($rawItems as $item) {
+                if (! is_array($item)) {
+                    continue;
+                }
+                $uid = trim((string) ($item['uid'] ?? ''));
+                $key = $uid !== '' ? "uid:{$uid}" : 'id:' . ($item['id'] ?? spl_object_id((object) $item));
+                if (isset($seen[$key])) {
+                    continue;
+                }
+                $seen[$key] = true;
+                $deduped[] = $item;
+            }
+
+            if ($allPagesSucceeded && $deduped !== []) {
+                Cache::put($cacheKey, $deduped, now()->addMinutes(10));
+            }
+
+            return $deduped;
+        } catch (\Throwable $e) {
+            Log::error("PortalSemedAuthService: erro ao buscar {$logLabel} paginado(s)", [
+                'error' => $e->getMessage(),
+            ]);
+            return [];
+        }
     }
 
     /**
