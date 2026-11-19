@@ -39,7 +39,7 @@ class SchoolGroupController extends Controller
 
         $result = $portalAuth->fetchPublicUnits($search, $type, $page, $perPage);
 
-        if (! ($result['ok'] ?? false)) {
+        if (!($result['ok'] ?? false)) {
             return response()->json([
                 'success' => false,
                 'message' => $result['message'] ?? 'Erro ao consultar unidades no Portal SEMED.',
@@ -110,7 +110,7 @@ class SchoolGroupController extends Controller
     )]
     public function members(string $schoolUid): JsonResponse
     {
-        $group = SchoolGroup::with(['members' => fn ($q) => $q->orderBy('name')->orderBy('email')])
+        $group = SchoolGroup::with(['members' => fn($q) => $q->orderBy('name')->orderBy('email')])
             ->where('school_uid', $schoolUid)
             ->first();
 
@@ -195,7 +195,7 @@ class SchoolGroupController extends Controller
             'school_name' => $validated['school_name'] ?? null,
             'unit_type' => $validated['unit_type'] ?? null,
             'school_inep' => $validated['school_inep'] ?? null,
-        ], fn ($value) => $value !== null && trim((string) $value) !== '');
+        ], fn($value) => $value !== null && trim((string) $value) !== '');
         if ($groupUpdates !== []) {
             $group->update($groupUpdates);
         }
@@ -329,7 +329,7 @@ class SchoolGroupController extends Controller
             'role' => isset($validated['role']) ? trim($validated['role']) : null,
             'portal_user_id' => $validated['portal_user_id'] ?? null,
             'portal_user_uid' => $validated['portal_user_uid'] ?? null,
-        ], fn ($val) => $val !== null);
+        ], fn($val) => $val !== null);
 
         if (array_key_exists('active', $validated)) {
             $attributes['active'] = (bool) $validated['active'];
@@ -441,7 +441,7 @@ class SchoolGroupController extends Controller
             $unitType
         );
 
-        if (! ($result['ok'] ?? false)) {
+        if (!($result['ok'] ?? false)) {
             return response()->json([
                 'success' => false,
                 'message' => $result['message'] ?? 'Falha ao sincronizar grupo.',

@@ -12,7 +12,8 @@ class SchoolGroupAuthService
 {
     public function __construct(
         private readonly PortalSemedAuthService $portalAuth
-    ) {}
+    ) {
+    }
 
     /**
      * Passo 1: Normaliza login (e-mail ou CPF) e verifica vínculo ativo no grupo da escola ou setor.
@@ -27,10 +28,10 @@ class SchoolGroupAuthService
         $member = $this->findActiveMember($schoolUid, $normalized);
 
         if (
-            ! $member
+            !$member
             && SchoolGroup::where('school_uid', $schoolUid)->doesntExist()
             && config('services.portal_semed.group_auto_sync')
-            && ! empty(config('services.portal_semed.api_token'))
+            && !empty(config('services.portal_semed.api_token'))
         ) {
             $sync = $this->syncSchoolGroupFromPortal($schoolUid);
             if ($sync['ok'] ?? false) {
@@ -70,11 +71,11 @@ class SchoolGroupAuthService
      */
     public function matchesPortalUser(SchoolGroupMember $member, array $portalUser): bool
     {
-        if ($member->portal_user_id && ! empty($portalUser['id'])) {
+        if ($member->portal_user_id && !empty($portalUser['id'])) {
             return (int) $member->portal_user_id === (int) $portalUser['id'];
         }
 
-        if ($member->portal_user_uid && ! empty($portalUser['uid'])) {
+        if ($member->portal_user_uid && !empty($portalUser['uid'])) {
             return strcasecmp($member->portal_user_uid, (string) $portalUser['uid']) === 0;
         }
 
@@ -120,13 +121,13 @@ class SchoolGroupAuthService
 
         // Completa identificadores ausentes no membro pré-cadastrado sem sobrescrever vínculos diferentes.
         $updates = ['local_user_id' => $user->id];
-        if (! $member->portal_user_id && ! empty($portalUser['id'])) {
+        if (!$member->portal_user_id && !empty($portalUser['id'])) {
             $updates['portal_user_id'] = (int) $portalUser['id'];
         }
-        if (! $member->portal_user_uid && ! empty($portalUser['uid'])) {
+        if (!$member->portal_user_uid && !empty($portalUser['uid'])) {
             $updates['portal_user_uid'] = (string) $portalUser['uid'];
         }
-        if (! $member->name && $user->name) {
+        if (!$member->name && $user->name) {
             $updates['name'] = $user->name;
         }
         $member->fill($updates)->save();
@@ -160,7 +161,7 @@ class SchoolGroupAuthService
         $type = in_array(strtolower((string) $unitType), ['school', 'sector'], true) ? strtolower((string) $unitType) : 'school';
         $portalResult = $this->portalAuth->fetchSchoolGroupMembersFromPortal($schoolUid, $bearerToken, $type);
 
-        if (! ($portalResult['ok'] ?? false)) {
+        if (!($portalResult['ok'] ?? false)) {
             return $portalResult;
         }
 
@@ -180,7 +181,7 @@ class SchoolGroupAuthService
 
         $syncedCount = 0;
         foreach ($portalResult['data'] as $entry) {
-            if (! is_array($entry)) {
+            if (!is_array($entry)) {
                 continue;
             }
 
@@ -200,7 +201,7 @@ class SchoolGroupAuthService
             $existing = SchoolGroupMember::query()
                 ->where('school_group_id', $group->id)
                 ->where(function ($q) use ($portalUid, $email, $cpf) {
-                    if (! empty($portalUid)) {
+                    if (!empty($portalUid)) {
                         $q->orWhere('portal_user_uid', $portalUid);
                     }
                     if ($email !== null) {
@@ -280,7 +281,7 @@ class SchoolGroupAuthService
             ->with('group')
             ->where('school_uid', $schoolUid)
             ->where('active', true)
-            ->whereHas('group', fn ($q) => $q->where('school_uid', $schoolUid)->where('active', true))
+            ->whereHas('group', fn($q) => $q->where('school_uid', $schoolUid)->where('active', true))
             ->where(function ($q) use ($normalized) {
                 if ($normalized['type'] === 'email') {
                     $q->whereRaw('LOWER(email) = ?', [$normalized['value']]);
